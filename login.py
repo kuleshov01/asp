@@ -15,10 +15,13 @@ def save_session(page):
 
 def load_session(context):
     """Загружает cookies из файла."""
-    cookies = page.context.cookies()
-    with open("session.json", "w") as file:
-        json.dump(cookies, file)
-    return cookies
+    if os.path.exists("session.json"):
+        with open("session.json", "r") as file:
+            cookies = json.load(file)
+            print(cookies)
+        context.add_cookies(cookies)
+        
+
 
 def try_authorization(page):
     """
@@ -53,17 +56,28 @@ def try_authorization(page):
     page.click('#lbtnLogin')
 
     # Ожидание завершения авторизации (например, появления элемента на следующей странице)
-    page.wait_for_selector('#ctl00_cph_rptRightMenu_ctl01_lbtnMenuItem')
+    page.wait_for_selector('#ctl00_cph_TopStr_NastrMenuTop')
 
     # Сохраняем сессию после успешной авторизации
-    save_session(page)
+    #save_session(page)
+    context.storage_state(path=SESSION_FILE)
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=False)
-    context = browser.new_context()
+    #context = browser.new_context()
 
     # Загрузим сессию, если она существует
-    context = load_session(context)
+    #if os.path.exists("session.json"):
+    #    context = load_session(context)
+
+    if os.path.exists(SESSION_FILE):
+        # Если сессия сохранена, загружаем её
+        context = browser.new_context(storage_state=SESSION_FILE)
+        print("Используем сохраненную сессию.")
+    else:
+        # Если сессия не сохранена, создаем новый контекст
+        context = browser.new_context()
+        print("Создаем новую сессию.")
 
     page = context.new_page()
 
@@ -72,7 +86,7 @@ with sync_playwright() as p:
 
     try:
         # Попытаемся дождаться появления элемента на целевой странице
-        page.wait_for_selector('#ctl00_cph_grdList_ctl01_ctrlFastFind_tbFind', timeout=5000)
+        page.wait_for_selector('#ctl00_cph_grdList_ctl01_ctrlFastFind_tbFind', timeout=3000)
     except Exception as e:
         # Если элемент не появился, возможно, нас перенаправило на страницу авторизации
         print("Не удалось найти элемент на целевой странице, вероятно, произошла переадресация на страницу авторизации.")
