@@ -5,6 +5,7 @@ import json
 # Ваши учетные данные
 LOGIN = "SAV"
 PASSWORD = "08082022"
+SESSION_FILE = "session_data.json"
 
 def save_session(page):
     """Сохраняет cookies в файл."""
@@ -14,10 +15,10 @@ def save_session(page):
 
 def load_session(context):
     """Загружает cookies из файла."""
-    if os.path.exists("session.json"):
-        with open("session.json", "r") as file:
-            cookies = json.load(file)
-        context.add_cookies(cookies)
+    cookies = page.context.cookies()
+    with open("session.json", "w") as file:
+        json.dump(cookies, file)
+    return cookies
 
 def try_authorization(page):
     """
@@ -62,7 +63,7 @@ with sync_playwright() as p:
     context = browser.new_context()
 
     # Загрузим сессию, если она существует
-    load_session(context)
+    context = load_session(context)
 
     page = context.new_page()
 
