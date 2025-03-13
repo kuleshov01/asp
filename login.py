@@ -19,6 +19,44 @@ def load_session(context):
             cookies = json.load(file)
         context.add_cookies(cookies)
 
+def try_authorization(page):
+    """
+    Попытка авторизации, если пользователь был перенаправлен на страницу авторизации.
+    """
+    # Ожидаем появления поля логина
+    page.wait_for_selector('#tbUserName')
+
+    # Заполнение логина
+    page.fill('#tbUserName', LOGIN)
+
+    # Заполнение пароля
+    page.fill('#tbPassword', PASSWORD)
+
+    # Нажатие на контейнер, чтобы открыть выпадающий список
+    page.click('#baseListContainer')
+
+    # Ожидание появления выпадающего списка
+    page.wait_for_selector('.dropdown')
+
+    # Поиск строки с текстом "Социальное обслуживание" в таблице
+    row = page.query_selector('xpath=//table[@id="gvBases"]//tr[contains(., "Социальное обслуживание")]')
+
+    if row:
+        # Клик на найденную строку
+        row.click()
+        print("Пункт 'Социальное обслуживание' выбран.")
+    else:
+        print("Пункт 'Социальное обслуживание' не найден.")
+
+    # Нажатие кнопки "Войти"
+    page.click('#lbtnLogin')
+
+    # Ожидание завершения авторизации (например, появления элемента на следующей странице)
+    page.wait_for_selector('#ctl00_cph_rptRightMenu_ctl01_lbtnMenuItem')
+
+    # Сохраняем сессию после успешной авторизации
+    save_session(page)
+
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=False)
     context = browser.new_context()
@@ -28,54 +66,19 @@ with sync_playwright() as p:
 
     page = context.new_page()
 
-    # Переход на страницу авторизации
-    page.goto("http://localhost/aspnetkp/Login.aspx")
+    # Переход на целевую страницу
+    page.goto("http://localhost/aspnetkp/Common/ListDeclaration.aspx?GSP=25")
 
-    # Проверим, авторизовались ли мы автоматически благодаря загруженным cookies
-    if not page.url == "http://localhost/aspnetkp/default.aspx":
-        # Если не авторизованы, выполняем процесс авторизации вручную
-        # Ожидание появления поля логина
-        page.wait_for_selector('#tbUserName')
+    try:
+        # Попытаемся дождаться появления элемента на целевой странице
+        page.wait_for_selector('#ctl00_cph_grdList_ctl01_ctrlFastFind_tbFind', timeout=5000)
+    except Exception as e:
+        # Если элемент не появился, возможно, нас перенаправило на страницу авторизации
+        print("Не удалось найти элемент на целевой странице, вероятно, произошла переадресация на страницу авторизации.")
+        try_authorization(page)
 
-        # Заполнение логина
-        page.fill('#tbUserName', LOGIN)
-
-        # Заполнение пароля
-        page.fill('#tbPassword', PASSWORD)
-
-        # Нажатие на контейнер, чтобы открыть выпадающий список
-        page.click('#baseListContainer')
-
-        # Ожидание появления выпадающего списка
-        page.wait_for_selector('.dropdown')
-
-        # Поиск строки с текстом "Социальное обслуживание" в таблице
-        row = page.query_selector('xpath=//table[@id="gvBases"]//tr[contains(., "Социальное обслуживание")]')
-
-        if row:
-            # Клик на найденную строку
-            row.click()
-            print("Пункт 'Социальное обслуживание' выбран.")
-        else:
-            print("Пункт 'Социальное обслуживание' не найден.")
-
-        # Нажатие кнопки "Войти"
-        page.click('#lbtnLogin')
-
-        # Ожидание завершения авторизации (например, появления элемента на следующей странице)
-        page.wait_for_selector('#ctl00_cph_rptRightMenu_ctl01_lbtnMenuItem')
-
-        # Сохраняем сессию после успешной авторизации
-        save_session(page)
-
-    # Продолжаем работу на сайте
-    page.click('#ctl00_cph_rptRightMenu_ctl01_lbtnMenuItem')
-    
-    page.wait_for_selector('#ctl00_cph_grdList_ctl01_ctrlFastFind_tbFind')
-    
-    #Вводим ребенка и включаем поиск
+    # Продолжаем работу на целевой странице
     page.fill('#ctl00_cph_grdList_ctl01_ctrlFastFind_tbFind', 'Мамедрзаева Элиза')
-    
     page.click('#ctl00_cph_grdList_ctl01_ctrlFastFind_lbtnFastFind')
 
     # Закрытие браузера
