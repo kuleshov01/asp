@@ -11,7 +11,7 @@ BASE = "Социальное обслуживание"
 current_directory = os.path.dirname(os.path.abspath(__file__))
 
 # Формируем полный путь к файлу
-file_path = os.path.join(current_directory, "1234.mhtml")
+file_path = os.path.join(current_directory, "site/1234.mhtml")
 
 with sync_playwright() as p:
     # Запуск браузера
