@@ -11,7 +11,7 @@ BASE = "Социальное обслуживание"
 current_directory = os.path.dirname(os.path.abspath(__file__))
 
 # Формируем полный путь к файлу
-file_path = os.path.join(current_directory, "site/1234.mhtml")
+file_path = os.path.join(current_directory, "site/edit_page.mhtml")
 
 with sync_playwright() as p:
     # Запуск браузера
@@ -22,7 +22,7 @@ with sync_playwright() as p:
     page.goto(f"file://{file_path}")  # Используем полный путь к файлу
 
     # Нахождение таблицы с классом RS_Grid2
-    grid_table = page.query_selector(".RS_Grid2")
+    grid_table = page.query_selector(".RS_GridHeader2")
 
     if grid_table:
         # Нахождение всех строк в таблице
