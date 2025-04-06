@@ -1,27 +1,72 @@
 from playwright.sync_api import Page # type: ignore
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import re
 import math
 import pandas as pd
 import time
+import numpy as np
+from workalendar.europe import Russia  # для учета российских праздников
 
 start_obsl = None
+new_day_of_month = ''
+
 month = 'Февраль 2025'
 data_month = '28.02.2025'
 day_of_month = '28'
 nach_year = "2025"
 nach_month = "02.2025"
+start_month_datetime = datetime(2025, 2, 1)
 
 #month = 'Январь 2025'
 #data_month = '31.01.2025'
 #day_of_month = '31'
 #nach_year = "2025"
 #nach_month = "01.2025"
+#start_month_datetime = datetime(2025, 1, 1)
 
-def process_numbers(plan, actual):
+def calc_work(start_date, rounded_plan):
+    global start_month_datetime
+
+    if start_date < start_month_datetime:
+        start_date = start_month_datetime
+    else: 
+        start_date = start_date.to_pydatetime()
+
+    # Создаем календарь для учета праздников
+    cal = Russia()
+    
+    # Определяем конец месяца
+    if start_month_datetime.month == 12:
+        end_month = datetime(start_month_datetime.year + 1, 1, 1)
+    else:
+        end_month = datetime(start_month_datetime.year, start_month_datetime.month + 1, 1)
+    end_month -= timedelta(days=1)  # последний день месяца
+    
+    # Рассчитываем все рабочие дни месяца
+    all_work_days = cal.get_working_days_delta(start_month_datetime, end_month)
+    
+    # Рассчитываем рабочие дни с даты начала обслуживания
+    actual_work_days = cal.get_working_days_delta(start_date, end_month)
+    
+    # Рассчитываем процент отработанных дней
+    if all_work_days > 0:
+        percentage = actual_work_days / all_work_days
+    else:
+        percentage = 1  # если месяц без рабочих дней (крайний случай)
+    
+    # Корректируем план и округляем вверх
+    adjusted_plan = np.ceil(rounded_plan * percentage)
+
+    if int(adjusted_plan) == 0:
+        raise ValueError("Заполняемое число услуг не может быть равно нулю.")
+    
+    return int(adjusted_plan)
+
+def process_numbers(plan, actual, date_start):
+
     if actual == 0:
-        raise ValueError("Фактическое число не может быть равно нулю.")
+        raise ValueError("Фактическое число ИП не может быть равно нулю.")
 
     if plan == 84: 
         return 28
@@ -29,13 +74,13 @@ def process_numbers(plan, actual):
     rounded_plan = math.ceil(plan / 3)
 
     if rounded_plan >= actual:
-        return actual
+        return calc_work(date_start, actual)
     else:
         if start_obsl > 1:
             rounded_plan = rounded_plan - 1
-        return rounded_plan
+        return calc_work(date_start, rounded_plan)
 
-def find_child(page: Page, status, start_obsl):
+def find_child(page: Page, status, start_date):
     if page:
         page.wait_for_selector('#ctl00_cph_grdList > tbody > tr')
         print('Поиск необходимой карточки пользователя')
@@ -70,12 +115,11 @@ def find_child(page: Page, status, start_obsl):
                 
                 target_row = None
                 latest_date = None
-                
                 for row in body_rows:
                     supplier = row.query_selector(f"td:nth-of-type({column_indices['Поставщик']})")
                     date = row.query_selector(f"td:nth-of-type({column_indices['Дата']})")
 
-                    date1 = start_obsl.strftime("%d.%m.%Y")
+                    date1 = start_date.strftime("%d.%m.%Y")
 
                     if supplier and date:
                         supplier_text = supplier.inner_text().strip()
@@ -88,13 +132,16 @@ def find_child(page: Page, status, start_obsl):
                         #Если дата в строке совпала с датой заявления, значит это оно, можно не искать дальше
                         if ((supplier_text == '' or 'АНО "Раскрой свой мир"' in supplier_text)  and cleaned_data == date1):
                             target_row = row
+                            print("Дата ИПР совпала с датой в exel. Пропускаем все и берем это заявление")
                             break
                     
+                        img = page.locator('img[title*="Предоставление услуг"]')
                         # Поиск новых или старых в завимости их задачи
                         if (
                             #(supplier_text == '' and status == 'new' and page.is_visible('img[title="Составлена ИП"]')) or
                             ((supplier_text == '' or 'АНО "Раскрой свой мир"' in supplier_text) and status == 'new' and page.is_visible('img[title="Составлена ИП"]')) or
                             ('АНО "Раскрой свой мир"' in supplier_text and status == 'old') or
+                            ('АНО "Раскрой свой мир"' in supplier_text and img.count() > 0) or
                             ('АНО "Раскрой свой мир"' in supplier_text and status == 'new' and (page.is_visible('img[title="Выбран поставщик"]') or page.is_visible('img[title="Заключен договор"]')))
                         ):
                             # Если это первая подходящая строка или дата более поздняя
@@ -128,43 +175,54 @@ def new_contract(page: Page):
 
         return page
     
-def new_dogovor(page: Page, date2, number_doc):
-    if page:
+def find_dogovor(page: Page):
 
+    if page:
         page.click("#ctl00_cph_lbtnTabReshen")
 
         #Если уже договор заполен, то сбрасываем
         element = page.query_selector("#ctl00_cph_grZayvView_ctl02_tr_Rekv > td > span")
-        if not element:
-
-            option_text = page.locator("#ctl00_cph_ListData > option").inner_text() ###??? не помню что это и если его нет
-            cleaned_data = option_text.split('*')[0].strip() 
-            date1 = datetime.strptime(cleaned_data, '%d.%m.%Y')
-            end_date = date1 + relativedelta(years=1) - relativedelta(days=1)
-            end_date = end_date.strftime("%d.%m.%Y")
-
-            if date1 < date2:
-                new_date = date2.strftime("%d.%m.%Y")
-            else: new_date = date1.strftime("%d.%m.%Y")
-
-            page.fill("#igtxtctl00_cph_grZayvView_ctl02_wdtDatr", new_date)
-            page.fill("#igtxtctl00_cph_grZayvView_ctl02_wdDatBegin", new_date)
-            page.fill("#igtxtctl00_cph_grZayvView_ctl02_wdDatEnd", end_date)
-
-            page.click("#ctl00_cph_grZayvView_ctl02_lbtnEditSoglUsl > img")
-            page.click("#ctl00_cph_UslSogl_mnuAddDog > li > div > img")
-
-            page.fill("#igtxtctl00_cph_WDC_D_Date", new_date)
-            page.fill("#ctl00_cph_TB_D_Nomer", number_doc)
-            page.click("#ctl00_cph_LB_Save")
-            page.click("#ctl00_cph_LB_Exit_Save_No")
-            page.click("#ctl00_cph_UslSogl_btnAddUslIP")
-            page.click("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit")
-            return page, None
-        else:
-            number_dogovor = page.locator("#ctl00_cph_grZayvView_ctl02_ListDogovor > option").inner_text()
+        if element:
+            number_dogovor = page.locator("#ctl00_cph_grZayvView_ctl02_ListDogovor > option:nth-child(1)").inner_text()
             extracted = number_dogovor.split("№")[1].split(" от ")[0] 
             return page, extracted
+        else:
+            return page, None
+    
+def new_dogovor(page: Page, take_serv, number_doc):
+    global start_month_datetime
+
+    if page:
+
+        option_text = page.locator("#ctl00_cph_ListData > option").inner_text() #дата составления ИПР
+        cleaned_data = option_text.split('*')[0].strip() 
+        date1 = datetime.strptime(cleaned_data, '%d.%m.%Y')
+        end_date = date1 + relativedelta(years=1) - relativedelta(days=1) ## ИПР +год -1 день
+        end_date = end_date.strftime("%d.%m.%Y")
+
+        take_serv_as_dt = take_serv.to_pydatetime()
+        # Выбираем бóльшую дату между date1 и take_serv, но не меньше февраля 2025
+        new_date_dt = max(date1, take_serv_as_dt)  # Сначала берем позднюю из двух
+        new_date_dt = max(new_date_dt, start_month_datetime)   # Но не раньше февраля 2025
+
+        new_date = new_date_dt.strftime("%d.%m.%Y")
+        take_serv = take_serv_as_dt.strftime("%d.%m.%Y")
+
+        page.fill("#igtxtctl00_cph_grZayvView_ctl02_wdtDatr", take_serv)
+        page.fill("#igtxtctl00_cph_grZayvView_ctl02_wdDatBegin", new_date)
+        page.fill("#igtxtctl00_cph_grZayvView_ctl02_wdDatEnd", end_date)
+
+        page.click("#ctl00_cph_grZayvView_ctl02_lbtnEditSoglUsl > img")
+        page.click("#ctl00_cph_UslSogl_mnuAddDog > li > div > img")
+
+        page.fill("#igtxtctl00_cph_WDC_D_Date", new_date)
+        page.fill("#ctl00_cph_TB_D_Nomer", number_doc)
+        page.click("#ctl00_cph_LB_Save")
+        page.click("#ctl00_cph_LB_Exit_Save_No")
+        page.click("#ctl00_cph_UslSogl_btnAddUslIP")
+        page.click("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit")
+        print(f"Договор {number_doc} был заполнен")
+        return page
 
 
 def comparing_dates(date1, date2):
@@ -179,11 +237,12 @@ def select_date(page: Page): #Ввод даты и месяца
     if page:
         global start_obsl
         global data_month
-        global day_of_month
+        global day_of_month, new_day_of_month
         global month
 
         select_month = month.lower()
         select_data_month = data_month
+        new_day_of_month = day_of_month
 
         #Ждем поля ввода даты
         page.click('a#ctl00_cph_lbtnTabReshen')
@@ -197,6 +256,7 @@ def select_date(page: Page): #Ввод даты и месяца
 
         # Сравниваем месяцы и годы
         start_obsl = comparing_dates(date1,date2)
+        #Если не полный месяц, меняем дату окончания
         element = page.query_selector('span#ctl00_cph_grZayvView_ctl02_lbPrekrInfo')
         if element:
             text = element.inner_text()
@@ -208,7 +268,7 @@ def select_date(page: Page): #Ввод даты и месяца
                 result = comparing_dates(date1,date2)
                 if result == 1: 
                     select_data_month = match.group(0)
-                    day_of_month = str(date1.day)
+                    new_day_of_month = str(date1.day)
         
         # Ищем последнюю заполненую дату, если она равно дате конца, пропускаем
         span_element = page.wait_for_selector("#ctl00_cph_grZayvView_ctl02_divLastDatn")
@@ -223,7 +283,7 @@ def select_date(page: Page): #Ввод даты и месяца
             if date_match:
                 result = date_match.group(1)
                 if result == select_month:
-                    print("Заявление уже было заполнено") 
+                    print("У заявления уже были начисления в этом месяце") 
                     return page, False
 
         print("Ввод месяца и даты")
@@ -285,9 +345,9 @@ def select_date(page: Page): #Ввод даты и месяца
 
         return page, True
 
-def edit_page(page: Page): #Редактирование таблицы фактическими услугами
+def edit_page(page: Page, start_date): #Редактирование таблицы фактическими услугами
     if page:
-        global day_of_month
+        global new_day_of_month
 
         for i in range(2):
             # Если открылся со 2 страницы, возвращаем обратно
@@ -322,8 +382,8 @@ def edit_page(page: Page): #Редактирование таблицы факт
                     text = header.inner_text().strip().lower()  # Приводим текст к нижнему регистру
                     if "социальные услуги" in text:
                         column_indices["социальные услуги"] = idx + 1
-                    elif day_of_month in text:
-                        column_indices[day_of_month] = idx + 1
+                    elif new_day_of_month in text:
+                        column_indices[new_day_of_month] = idx + 1
                     elif "ип" in text:
                         column_indices["ип"] = idx + 1
 
@@ -335,7 +395,7 @@ def edit_page(page: Page): #Редактирование таблицы факт
                         
                     for row in body_rows:
                         soc = row.query_selector(f"td:nth-of-type({column_indices['социальные услуги']})")
-                        input = row.query_selector(f"td:nth-of-type({column_indices[day_of_month]})")
+                        input = row.query_selector(f"td:nth-of-type({column_indices[new_day_of_month]})")
                         ip = row.query_selector(f"td:nth-of-type({column_indices['ип']})")
 
                         # Поиск в услугах значений ИП
@@ -360,7 +420,7 @@ def edit_page(page: Page): #Редактирование таблицы факт
 
                         # Вызов функции process_numbers
                         try:
-                            result = process_numbers(soc_number, ip_number)
+                            result = process_numbers(soc_number, ip_number, start_date)
                                 
                             # Ищем элемент <input type="text"> внутри переданного элемента
                             #text_input = input.query_selector("input[type='text']")
@@ -379,7 +439,7 @@ def edit_page(page: Page): #Редактирование таблицы факт
                                 page.evaluate(js_code)
 
                         except ValueError as e:
-                            print(f"Ошибка: {e}")
+                            raise Exception(f"Ошибка: {e}")
                             
                     print("Страница заполнена")
 

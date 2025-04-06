@@ -49,6 +49,12 @@ def df_load():
     df = pd.read_excel(file_path, sheet_name=sheet_name, header=1)
 
     orig_df = df.copy()
+    
+    # Преобразование всех датовых столбцов (укажите ваши колонки)
+    date_columns = ['взяли на обслуживание ', 'дата ипр']  # замените на реальные названия
+    for col in date_columns:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], dayfirst=True)  # здесь dayfirst работает
 
     # Чтение форматирования с помощью openpyxl
     workbook = load_workbook(file_path)
@@ -80,12 +86,14 @@ def df_replace(df, record):
     #print(df.columns.tolist())
     # Обновляем данные в найденной строке
     for index, (key, value) in enumerate(record.items()):
+
         if pd.isna(value):  # Проверка на NaN/None
             df.loc[mask, df.columns[index]] = np.nan
-        elif isinstance(value, (datetime, pd.Timestamp)):
-            # Приводим даты к единому формату
-            formatted_date = value.strftime("%d.%m.%Y")
-            df.loc[mask, df.columns[index]] = formatted_date
+        #elif isinstance(value, (datetime, pd.Timestamp)):
+            #breakpoint()
+            # Чертовщина, в переменых данные корретны, а при сохранении timestamp меняет месяц и день
+            #formatted_date = value.strftime("%d.%m.%Y")
+            #df.loc[mask, df.columns[index]] = formatted_date
         else:
             df.loc[mask, df.columns[index]] = value
     

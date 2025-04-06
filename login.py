@@ -1,7 +1,7 @@
 from playwright.sync_api import sync_playwright # type: ignore
 import os
 import json
-from func import select_date, edit_page, nach_page, find_child, new_contract, new_dogovor
+from func import select_date, edit_page, nach_page, find_child, new_contract, new_dogovor, find_dogovor
 from exel import df_load, df_filter, df_replace, df_save, df_find
 import sys
 import traceback
@@ -11,6 +11,7 @@ import math
 month = 'февраль'
 
 
+df = None
 # Ваши учетные данные
 LOGIN = "SAV"
 PASSWORD = "08082022"
@@ -29,13 +30,6 @@ def load_session(context):
             cookies = json.load(file)
             print(cookies)
         context.add_cookies(cookies)
-
-def exel_save(orig_df, sheet, records):
-    if records:
-        new_df = df_replace(orig_df, records)
-        df_save(new_df, sheet)
-    else:
-        print("Массив для сохранения в таблице пустой")
 
 def increment_prefix(original: str) -> str:
     try:
@@ -113,53 +107,63 @@ with sync_playwright() as p:
         df, orig_df, sheet = df_load()
         records = df_filter(df, month)
 
-        #records = [entry for entry in records if entry['фио '] == 'Сазонов Тимофей'] #DEBUG#     
+        #records = [entry for entry in records if 'Бадыкшанова Анна' in entry['фио ']] #DEBUG#  
 
         if records:
             # Пример вывода одного элемента
             for i, record in enumerate(records):  # Идем с конца массива, чтобы избежать проблем с индексацией при удалении элементов
                 try:
                     if record[month] != '!':
-                        
                         page.fill('#ctl00_cph_grdList_ctl01_ctrlFastFind_tbFind', record['фио '])
                         page.click('#ctl00_cph_grdList_ctl01_ctrlFastFind_lbtnFastFind')
                         print(f"\nПоиск заявлениий ребенка {record['фио ']} [{i+1}/{len(records)}]")
 
                         #Проверка на наличие договора в заявлении
                         is_new = (not record['номер договора']) or str(record['номер договора']).strip().lower() in ('nan', 'none', '')
+
+                        #Проверка на наличие договора
                         page = find_child(page, 'new' if is_new else 'old', record['дата ипр'])
 
-                        #Проверка на наличие договора в заявлении
-                        #page = find_child(page, 'new' if math.isnan(record['номер договора']) else 'old')
+                        #Обновляем значение, если внутри договора нет, а мы думаем что есть
+                        element = page.query_selector("#ctl00_cph_grZayvView_ctl02_tr_Rekv > td > span")
+                        if not element:
+                            is_new = True
 
                         if is_new:
                             page = new_contract(page)
-                            number = increment_prefix(df_find(df))
-                            breakpoint()
-                            record['номер договора'] = number
-
-                            page, doc = new_dogovor(page, record['взяли на обслуживание '], number)
-
-                            if doc:
-                                print("У заявителя уже имеется заполненый договор")
-                                record['номер договора'] = doc   
+                            #!!!нужно как-то проверять, сначала на странице есть ли договор
+                            #!!!обновлять df и уже искать последний средни них, если надо
+                            page, number_doc = find_dogovor(page)
                             
-                            print("Договор заявителя заполен")
-                            exel_save(orig_df, sheet, records[i]) #Сохраняем номер контракта
-                        #breakpoint()
+
+
+                            
+
+                            if number_doc:
+                                print(f"У заявителя уже имеется заполненый договор {number_doc}")
+                            else:  
+
+                                number_doc = increment_prefix(df_find(df))
+                                page = new_dogovor(page, record['взяли на обслуживание '], number_doc)
+                                print("Договор заявителя заполен")
+
+                            
+                            record['номер договора'] = number_doc
+                            #Обновляем датафрейм
+                            df = df_replace(df, record)
+                        else:
+                            print("У заявителя уже имеется заполненый договор")
                         not_end = False
                         while True:
                             
                             page, not_end = select_date(page)
                             if not_end: #Если заявления уже заполнено, то событие завершается
-                                page, error = edit_page(page)
+                                page, error = edit_page(page, record['взяли на обслуживание '])
 
                                 # Если edit_page выполнена успешно, выходим из цикла while
                                 if error is None:
                                     break
 
-                                # Если у нас ошибка в отсуствии ИП, то он сам заполнит, надо перезапустить процес
-                                # Я сделал это циклом, но по хорошему надо через условие, просто еще раз запустить
                                 print(f"Перезапуск процесса для записи {record['фио ']}")
 
                             break
@@ -169,10 +173,10 @@ with sync_playwright() as p:
                         record[month] = '!' 
                         page.click("#ctl00_cph_TopStr1_lbtnTopStr_SaveExit")
                         print(f"Выход из страницы заявления") 
-                        exel_save(orig_df, sheet, record) #Сохраняем успешное завершение
+                        df = df_replace(df, record)
                 except Exception as e:
                     print(f"Ошибка при обработке записи {record['фио ']}: {e}")
-                    traceback.print_exc()  # Печатает полный traceback
+                    #traceback.print_exc()  # Печатает полный traceback
                     page.goto("http://localhost/aspnetkp/Common/ListDeclaration.aspx?GSP=25")
 
         else:
@@ -187,5 +191,6 @@ with sync_playwright() as p:
     finally:
         # Закрытие браузера
         browser.close()
+        df_save(df, sheet)
         print("Скрипт завершается...")
         sys.exit(0)

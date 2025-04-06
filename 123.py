@@ -1,29 +1,40 @@
-from playwright.sync_api import sync_playwright # type: ignore
-import os
-import json
-from func import select_date, edit_page, nach_page, find_child, new_contract, new_dogovor
-from exel import df_load, df_filter, df_replace, df_save, df_find
-import sys
-import traceback
-import math
+import pandas as pd
+from datetime import datetime, timedelta
+import numpy as np
+from workalendar.europe import Russia  # для учета российских праздников
 
-def exel_save(orig_df, sheet, records):
-    if records:
-        new_df = df_replace(orig_df, records)
-        df_save(new_df, sheet)
+def calculate_adjusted_services(start_month_datetime, start_obsl, rounded_plan):
+    # Создаем календарь для учета праздников
+    cal = Russia()
+    
+    # Определяем конец месяца
+    if start_month_datetime.month == 12:
+        end_month = datetime(start_month_datetime.year + 1, 1, 1)
     else:
-        print("Массив для сохранения в таблице пустой")
+        end_month = datetime(start_month_datetime.year, start_month_datetime.month + 1, 1)
+    end_month -= timedelta(days=1)  # последний день месяца
+    
+    # Рассчитываем все рабочие дни месяца
+    all_work_days = cal.get_working_days_delta(start_month_datetime, end_month)
+    
+    # Рассчитываем рабочие дни с даты начала обслуживания
+    actual_work_days = cal.get_working_days_delta(start_obsl.to_pydatetime(), end_month)
+    
+    # Рассчитываем процент отработанных дней
+    if all_work_days > 0:
+        percentage = actual_work_days / all_work_days
+    else:
+        percentage = 1  # если месяц без рабочих дней (крайний случай)
+    
+    # Корректируем план и округляем вверх
+    adjusted_plan = np.ceil(rounded_plan * percentage)
+    
+    return int(adjusted_plan)
 
-df, orig_df, sheet = df_load()
-records = df_filter(df, 'январь')
+# Пример использования:
+start_month_datetime = datetime(2025, 3, 1)
+start_obsl = pd.Timestamp('2025-02-01 00:00:00')
+rounded_plan = 20  # пример значения
 
-records = [entry for entry in records if entry['фио '] == 'Гапонов Егор'] #DEBUG# 
-
-if records:
-    # Пример вывода одного элемента
-    for i, record in enumerate(records): 
-        print(f"\nПоиск заявлениий ребенка {record['фио ']} [{i+1}/{len(records)}]")
-
-        record['номер договора'] = '1/2025'
-        exel_save(orig_df, sheet, records[i])
-        #exel_save(orig_df, sheet, records[i]) #Сохраняем номер контракта
+adjusted = calculate_adjusted_services(start_month_datetime, start_obsl, rounded_plan)
+print(f"Скорректированный план: {adjusted}")
