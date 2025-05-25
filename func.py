@@ -11,12 +11,26 @@ from workalendar.europe import Russia  # для учета российских 
 start_obsl = None
 new_day_of_month = ''
 
-month = 'Февраль 2025'
-data_month = '28.02.2025'
-day_of_month = '28'
+month = 'Апрель 2025'
+data_month = '30.04.2025'
+day_of_month = '30'
 nach_year = "2025"
-nach_month = "02.2025"
-start_month_datetime = datetime(2025, 2, 1)
+nach_month = "04.2025"
+start_month_datetime = datetime(2025, 4, 1)
+
+#month = 'Март 2025'
+#data_month = '31.03.2025'
+#day_of_month = '31'
+#nach_year = "2025"
+#nach_month = "03.2025"
+#start_month_datetime = datetime(2025, 3, 1)
+
+#month = 'Февраль 2025'
+#data_month = '28.02.2025'
+#day_of_month = '28'
+#nach_year = "2025"
+#nach_month = "02.2025"
+#start_month_datetime = datetime(2025, 2, 1)
 
 #month = 'Январь 2025'
 #data_month = '31.01.2025'
