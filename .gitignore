@@ -8,3 +8,6 @@ session_data.json
 
 # Environment specific files
 .env
+
+# macOS specific files
+.DS_Store

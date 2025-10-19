@@ -24,8 +24,14 @@ print()
 
 df = None
 # Ваши учетные данные
-LOGIN = "SAV"
-PASSWORD = "08082022"
+import os
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения из файла .env
+load_dotenv()
+
+LOGIN = os.getenv("LOGIN")
+PASSWORD = os.getenv("PASSWORD")
 SESSION_FILE = "data/session_data.json"
 
 def save_session(page):
