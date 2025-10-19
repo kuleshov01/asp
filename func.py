@@ -324,33 +324,36 @@ def new_dogovor(page: Page, take_serv, number_doc):
         page.click("#ctl00_cph_UslSogl_mnuAddDog > li > div > img")
         page.fill("#igtxtctl00_cph_WDC_D_Date", new_date)
         page.fill("#ctl00_cph_TB_D_Nomer", number_doc)
+        # Добавляем проверку, что номер договора заполнен правильно
+        page.wait_for_timeout(500)  # Ждем 0.5 секунды, чтобы убедиться, что значение установлено
+        filled_number = page.input_value("#ctl00_cph_TB_D_Nomer")
+        if filled_number != number_doc:
+            print(f"Предупреждение: номер договора не был установлен корректно. Ожидалось: {number_doc}, получено: {filled_number}")
+            # Повторяем ввод, если значение не установлено корректно
+            page.fill("#ctl00_cph_TB_D_Nomer", number_doc)
+            page.wait_for_timeout(200)
+            filled_number = page.input_value("#ctl00_cph_TB_D_Nomer")
+            if filled_number != number_doc:
+                print(f"Ошибка: не удалось установить номер договора. Ожидалось: {number_doc}, получено: {filled_number}")
+            else:
+                print(f"Номер договора: {number_doc}")
+        
         
         # Добавляем проверку, что элементы существуют перед взаимодействием
-        page.wait_for_selector("#ctl00_cph_LB_Save")
+
         page.click("#ctl00_cph_LB_Save")
-        
-        # Ждем немного перед следующим кликом
-        page.wait_for_timeout(1000)
-        
-        # Проверяем, существует ли элемент перед кликом
-        if page.query_selector("#ctl00_cph_LB_Save"):
-            page.click("#ctl00_cph_LB_Save")
-        
+        page.click("#ctl00_cph_LB_Save")
         #page.wait_for_timeout(5000)
-        if page.query_selector("#ctl00_cph_LB_Exit_Save_No"):
-            page.click("#ctl00_cph_LB_Exit_Save_No")
-        
-        # Проверяем существование элемента перед кликом
-        if page.query_selector("#ctl00_cph_UslSogl_btnAddUslIP"):
-            page.click("#ctl00_cph_UslSogl_btnAddUslIP")
-        
-        # Проверяем существование элемента перед кликом
-        if page.query_selector("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit"):
-            page.click("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit")
+        page.click("#ctl00_cph_LB_Exit_Save_No")
+        page.click("#ctl00_cph_UslSogl_btnAddUslIP")
+        page.click("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit")
         
         print(f"Договор {number_doc} был заполнен")
+        
+        # Ждем немного, чтобы убедиться, что страница корректно закрыта
+        page.wait_for_timeout(100)
+        
         return page
-
 
 def comparing_dates(date1, date2):
         # Сравниваем месяцы и годы

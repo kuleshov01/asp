@@ -37,13 +37,15 @@ SESSION_FILE = "data/session_data.json"
 def save_session(page):
     """Сохраняет cookies в файл."""
     cookies = page.context.cookies()
-    with open("data/session.json", "w") as file:
+    # Создаем директорию, если она не существует
+    os.makedirs(os.path.dirname(SESSION_FILE), exist_ok=True)
+    with open(SESSION_FILE, "w") as file:
         json.dump(cookies, file)
 
 def load_session(context):
     """Загружает cookies из файла."""
-    if os.path.exists("data/session.json"):
-        with open("data/session.json", "r") as file:
+    if os.path.exists(SESSION_FILE):
+        with open(SESSION_FILE, "r") as file:
             cookies = json.load(file)
             print(cookies)
         context.add_cookies(cookies)
