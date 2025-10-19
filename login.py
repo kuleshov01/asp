@@ -1,7 +1,7 @@
 from playwright.sync_api import sync_playwright # type: ignore
 import os
 import json
-from func import select_date, edit_page, nach_page, find_child, new_contract, new_dogovor, find_dogovor
+from func import select_date, edit_page, nach_page, find_child, new_contract, new_dogovor, find_dogovor, remove_middle_name
 from exel import df_load, df_filter, df_replace, df_save, df_find
 import sys
 import traceback
@@ -129,7 +129,9 @@ with sync_playwright() as p:
             for i, record in enumerate(records):  # Идем с конца массива, чтобы избежать проблем с индексацией при удалении элементов
                 try:
                     if record[month] != '!':
-                        page.fill('#ctl00_cph_grdList_ctl01_ctrlFastFind_tbFind', record['фио '])
+                        # Применяем функцию для удаления отчества из корейских имен
+                        processed_fio = remove_middle_name(record['фио '])
+                        page.fill('#ctl00_cph_grdList_ctl01_ctrlFastFind_tbFind', processed_fio)
                         page.click('#ctl00_cph_grdList_ctl01_ctrlFastFind_lbtnFastFind')
                         print(f"\nПоиск заявлениий ребенка {record['фио ']} [{i+1}/{len(records)}]")
 
