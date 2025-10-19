@@ -138,6 +138,19 @@ with sync_playwright() as p:
 
                         #Проверка на наличие договора
                         page = find_child(page, 'new' if is_new else 'old', record['дата ипр'])
+                        
+                        # Проверяем, что page не является None
+                        if page is None:
+                            print(f"Не удалось найти карточку пользователя для {record['фио ']}, пропускаем запись.")
+                            continue
+
+                        # Проверяем, находимся ли мы на странице просмотра заявления
+                        # Если элемент с ФИО не найден, значит карточка не была найдена
+                        try:
+                            page.wait_for_selector("#ctl00_cph_lbFIOZUsl", timeout=5000)
+                        except:
+                            print(f"Карточка пользователя для {record['фио ']} не найдена, пропускаем запись.")
+                            continue
 
                         #Обновляем значение, если внутри договора нет, а мы думаем что есть
                         element = page.query_selector("#ctl00_cph_grZayvView_ctl02_tr_Rekv > td > span")
@@ -192,7 +205,13 @@ with sync_playwright() as p:
                 except Exception as e:
                     print(f"Ошибка при обработке записи {record['фио ']}: {e}")
                     #traceback.print_exc()  # Печатает полный traceback
-                    page.goto("http://localhost/aspnetkp/Common/ListDeclaration.aspx?GSP=25")
+                    if page is not None:
+                        page.goto("http://localhost/aspnetkp/Common/ListDeclaration.aspx?GSP=25")
+                    else:
+                        print("Объект page равен None, невозможно выполнить переход на страницу.")
+                        # Повторно создаем page объект
+                        page = context.new_page()
+                        page.goto("http://localhost/aspnetkp/Common/ListDeclaration.aspx?GSP=25")
                 
                 df_save(df, sheet)
 
@@ -203,6 +222,10 @@ with sync_playwright() as p:
     except Exception as e:
         print(f"Ошибка при обработке: {e}")
         traceback.print_exc()  # Печатает полный traceback
+        if page is not None:
+            page.goto("http://localhost/aspnetkp/Common/ListDeclaration.aspx?GSP=25")
+        else:
+            print("Объект page равен None, невозможно выполнить переход на страницу.")
 
 
     finally:

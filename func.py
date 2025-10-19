@@ -71,7 +71,7 @@ def _init_dates():
     # Вычисляем даты
     start = datetime(year, month_num, 1)
     if month_num == 12:
-        end = datetime(year + 1, 1, 1) - timedelta(days=1)
+        end = datetime(year + 1, 1) - timedelta(days=1)
     else:
         end = datetime(year, month_num + 1, 1) - timedelta(days=1)
 
@@ -140,7 +140,7 @@ def calc_work(start_date, rounded_plan):
     if all_work_days > 0:
         percentage = actual_work_days / all_work_days
     else:
-        percentage = 1  # если месяц без рабочих дней (крайний случай)
+        percentage = 1 # если месяц без рабочих дней (крайний случай)
     
     # Корректируем план и округляем вверх
     adjusted_plan = np.ceil(rounded_plan * percentage)
@@ -214,7 +214,10 @@ def find_child(page: Page, status, start_date):
 
                         # Очистка строки от лишних символов
                         cleaned_data = date_text.replace('\xa0Р', '').strip()
-                        date = datetime.strptime(cleaned_data.split()[0], '%d.%m.%Y')  # Преобразование строки в объект datetime.
+                        try:
+                            date = datetime.strptime(cleaned_data.split()[0], '%d.%m.%Y')  # Преобразование строки в объект datetime.
+                        except ValueError:
+                            continue  # Пропускаем, если формат даты не распознан
                         
                         #Если дата в строке совпала с датой заявления, значит это оно, можно не искать дальше
                         if ((supplier_text == '' or 'АНО "Раскрой свой мир"' in supplier_text)  and cleaned_data == date1):
@@ -244,8 +247,26 @@ def find_child(page: Page, status, start_date):
                         page.click(f'#{id_value}')
                         print(f"Переход на страницу ребенка #{id_value}")
                         return page
+                else:
+                    print("Не найдена подходящая карточка пользователя")
+                    # Возвращаемся к списку заявлений
+                    try:
+                        page.goto("http://localhost/aspnetkp/Common/ListDeclaration.aspx?GSP=25")
+                    except:
+                        print("Не удалось вернуться к списку заявлений")
+                    return page  # Возвращаем page, даже если карточка не найдена
+        else:
+            print("Таблица с классом RS_Grid2 не найдена")
+            # Пытаемся вернуться к списку заявлений
+            try:
+                page.goto("http://localhost/aspnetkp/Common/ListDeclaration.aspx?GSP=25")
+            except:
+                print("Не удалось вернуться к списку заявлений")
+            return page  # Возвращаем page, даже если таблица не найдена
+    else:
+        print("Объект page не определен")
+        return None
                 
-    
 
 def new_contract(page: Page):
     if page:
@@ -303,13 +324,30 @@ def new_dogovor(page: Page, take_serv, number_doc):
         page.click("#ctl00_cph_UslSogl_mnuAddDog > li > div > img")
         page.fill("#igtxtctl00_cph_WDC_D_Date", new_date)
         page.fill("#ctl00_cph_TB_D_Nomer", number_doc)
-        #page.wait_for_timeout(5000)
+        
+        # Добавляем проверку, что элементы существуют перед взаимодействием
+        page.wait_for_selector("#ctl00_cph_LB_Save")
         page.click("#ctl00_cph_LB_Save")
-        page.click("#ctl00_cph_LB_Save")
+        
+        # Ждем немного перед следующим кликом
+        page.wait_for_timeout(1000)
+        
+        # Проверяем, существует ли элемент перед кликом
+        if page.query_selector("#ctl00_cph_LB_Save"):
+            page.click("#ctl00_cph_LB_Save")
+        
         #page.wait_for_timeout(5000)
-        page.click("#ctl00_cph_LB_Exit_Save_No")
-        page.click("#ctl00_cph_UslSogl_btnAddUslIP")
-        page.click("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit")
+        if page.query_selector("#ctl00_cph_LB_Exit_Save_No"):
+            page.click("#ctl00_cph_LB_Exit_Save_No")
+        
+        # Проверяем существование элемента перед кликом
+        if page.query_selector("#ctl00_cph_UslSogl_btnAddUslIP"):
+            page.click("#ctl00_cph_UslSogl_btnAddUslIP")
+        
+        # Проверяем существование элемента перед кликом
+        if page.query_selector("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit"):
+            page.click("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit")
+        
         print(f"Договор {number_doc} был заполнен")
         return page
 
@@ -391,40 +429,50 @@ def select_date(page: Page): #Ввод даты и месяца
         #    page.click("#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button")
         
         print("Переход на страницу с заполнением")
-        page.wait_for_selector('#ctl00_cph_UF1_btnChangeGridToTabel')
-        # Получаем все строки, которые не являются заголовками
+        
+        # Проверяем, что страница не закрыта и элемент существует
+        if page.query_selector('#ctl00_cph_UF1_btnChangeGridToTabel'):
+            page.wait_for_selector('#ctl00_cph_UF1_btnChangeGridToTabel')
+            # Получаем все строки, которые не являются заголовками
 
-        print("Поиск таблицы")
-        rows = page.query_selector_all('#ctl00_cph_UF1_pnlUslFakt > table > tbody > tr:not(.RS_GridHeader2)')
-        if len(rows) > 0:
-            print("Таблица найдена!")
-        else:
-            print("Таблица не найдена, заполняем")
+            print("Поиск таблицы")
+            rows = page.query_selector_all('#ctl00_cph_UF1_pnlUslFakt > table > tbody > tr:not(.RS_GridHeader2)')
+            if len(rows) > 0:
+                print("Таблица найдена!")
+            else:
+                print("Таблица не найдена, заполняем")
+                
+                # Проверяем существование элемента перед кликом
+                if page.query_selector('#ctl00_cph_UF1_btnlbtnHeaderAddUsl'):
+                    # Пытаемся дождаться элемента и кликнуть по нему
+                    page.wait_for_selector('#ctl00_cph_UF1_btnlbtnHeaderAddUsl')
+                    page.click('#ctl00_cph_UF1_btnlbtnHeaderAddUsl')
             
-            # Пытаемся дождаться элемента и кликнуть по нему
-            page.wait_for_selector('#ctl00_cph_UF1_btnlbtnHeaderAddUsl')
-            page.click('#ctl00_cph_UF1_btnlbtnHeaderAddUsl')
-        
-        # Нажимаем на кнопку
-        page.click('#ctl00_cph_UF1_btnChangeGridToTabel')
+            # Проверяем существование элемента перед кликом
+            if page.query_selector('#ctl00_cph_UF1_btnChangeGridToTabel'):
+                # Нажимаем на кнопку
+                page.click('#ctl00_cph_UF1_btnChangeGridToTabel')
 
-        # Ожидаем появления кнопки "Ок" и нажимаем на неё, если она появилась
+                # Ожидаем появления кнопки "Ок" и нажимаем на неё, если она появилась
 
-        # Ждём появления кнопки с таймаутом 5 секунд
-        start_time = time.time()
-        button = None
-        
-        while time.time() - start_time < 5:  # 5 секунд
-            button = page.query_selector("#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button")
-            if button:#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button
-                break
-            time.sleep(0.5)  # Проверяем каждые 0.5 секунды
+                # Ждём появления кнопки с таймаутом 5 секунд
+                start_time = time.time()
+                button = None
+                
+                while time.time() - start_time < 5:  # 5 секунд
+                    button = page.query_selector("#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button")
+                    if button:#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button
+                        break
+                    time.sleep(0.5)  # Проверяем каждые 0.5 секунды
 
-        if button:
-            button.click()
-            print("Кнопка 'Ок' появилась. Нажата.")
+                if button:
+                    button.click()
+                    print("Кнопка 'Ок' появилась. Нажата.")
+                else:
+                    print("Кнопка 'Ок' не появилась. Продолжаем выполнение.")
         else:
-            print("Кнопка 'Ок' не появилась. Продолжаем выполнение.")
+            print("Элемент для перехода на страницу с заполнением не найден. Пропускаем шаг.")
+            return page, False
 
 
         #try:
@@ -441,105 +489,106 @@ def edit_page(page: Page, start_date): #Редактирование табли�
     if page:
         global new_day_of_month, expiration_date
 
-        for i in range(2):
-            # Если открылся со 2 страницы, возвращаем обратно
-            prev_page = page.query_selector('a[title="Перейти на предыдущую страницу"]')
-            if prev_page and i == 0:
-                id_value = prev_page.get_attribute('id')
-                disabled = prev_page.get_attribute('disabled')
-                if disabled is None:
-                    page.click(f'#{id_value}')
-                    print("Откатились на первую страницу")
+        # Процесс заполнения таблицы
+        print("Началось заполнение страницы")
 
-            # Процесс заполнения таблицы
-            print("Началось заполнение страницы")
+        # Нахождение таблицы с классом RS_Grid2
+        page.wait_for_selector(".RS_Grid2")
+        grid_table = page.query_selector_all(".RS_Grid2")
 
-            # Нахождение таблицы с классом RS_Grid2
-            page.wait_for_selector(".RS_Grid2")
-            grid_table = page.query_selector_all(".RS_Grid2")
+        if grid_table:
+            # Нахождение всех строк в таблице
+            table_rows = grid_table[0].query_selector_all("tbody > tr")
 
-            if grid_table:
-                # Нахождение всех строк в таблице
-                table_rows = grid_table[0].query_selector_all("tbody > tr")
+            # Словарь для хранения индексов колонок
+            column_indices = {}
 
-                # Словарь для хранения индексов колонок
-                column_indices = {}
+            # Первый проход по таблице для поиска заголовков
+            first_row = table_rows[0]
+            headers = first_row.query_selector_all("th.RS_GridHeader2")
 
-                # Первый проход по таблице для поиска заголовков
-                first_row = table_rows[0]
-                headers = first_row.query_selector_all("th.RS_GridHeader2")
+            # Цикл для поиска колонок
+            for idx, header in enumerate(headers):
+                text = header.inner_text().strip().lower()  # Приводим текст к нижнему регистру
+                if "социальные услуги" in text:
+                    column_indices["социальные услуги"] = idx + 1
+                elif new_day_of_month in text:
+                    column_indices[new_day_of_month] = idx + 1
+                elif "ип" in text:
+                    column_indices["ип"] = idx + 1
 
-                # Цикл для поиска колонок
-                for idx, header in enumerate(headers):
-                    text = header.inner_text().strip().lower()  # Приводим текст к нижнему регистру
-                    if "социальные услуги" in text:
-                        column_indices["социальные услуги"] = idx + 1
-                    elif new_day_of_month in text:
-                        column_indices[new_day_of_month] = idx + 1
-                    elif "ип" in text:
-                        column_indices["ип"] = idx + 1
+            # Проверка, найдены ли обе колонки
+            if "ип" in column_indices:
+                    
+                # Вывод всех строк не включая заголовки
+                body_rows = grid_table[0].query_selector_all("tbody > tr[class]")
+                    
+                for row in body_rows:
+                    soc = row.query_selector(f"td:nth-of-type({column_indices['социальные услуги']})")
+                    input = row.query_selector(f"td:nth-of-type({column_indices[new_day_of_month]})")
+                    ip = row.query_selector(f"td:nth-of-type({column_indices['ип']})")
 
-                # Проверка, найдены ли обе колонки
-                if "ип" in column_indices:
-                        
-                    # Вывод всех строк не включая заголовки
-                    body_rows = grid_table[0].query_selector_all("tbody > tr[class]")
-                        
-                    for row in body_rows:
-                        soc = row.query_selector(f"td:nth-of-type({column_indices['социальные услуги']})")
-                        input = row.query_selector(f"td:nth-of-type({column_indices[new_day_of_month]})")
-                        ip = row.query_selector(f"td:nth-of-type({column_indices['ип']})")
+                    # Поиск в услугах значений ИП
+                    soc_text = soc.inner_text().strip()
+                    match = re.search(r"\(ИП\)(\d+),", soc_text)
+                    soc_number = int(match.group(1))  # Преобразуем в число
 
-                        # Поиск в услугах значений ИП
-                        soc_text = soc.inner_text().strip()
-                        match = re.search(r"\(ИП\)(\d+),", soc_text)
-                        soc_number = int(match.group(1))  # Преобразуем в число
+                    # Перевод значений ИП в число
+                    ip_text = ip.inner_text().strip()
+                    match2 = re.search(r"\d+", ip_text.replace(",", "."))
 
-                        # Перевод значений ИП в число
-                        ip_text = ip.inner_text().strip()
-                        match2 = re.search(r"\d+", ip_text.replace(",", "."))
+                    if ip_text == '': #Заполняем ИП если нету и перезапускаем
+                        page.click("#ctl00_cph_UF1_TopStr5_lbtnTopStr_Exit")
+                        page.click("#ctl00_cph_grZayvView_ctl02_lbtnEditSoglUsl")
+                        page.click("#ctl00_cph_UslSogl_btnAddUslIP")
 
-                        if ip_text == '': #Заполняем ИП если нету и перезапускаем
-                            page.click("#ctl00_cph_UF1_TopStr5_lbtnTopStr_Exit")
-                            page.click("#ctl00_cph_grZayvView_ctl02_lbtnEditSoglUsl")
-                            page.click("#ctl00_cph_UslSogl_btnAddUslIP")
+                        page.wait_for_selector("#ctl00_cph_UslSogl_grUslSoglView")
+                        page.click("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit")
+                        return page, True
 
-                            page.wait_for_selector("#ctl00_cph_UslSogl_grUslSoglView")
-                            page.click("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit")
-                            return page, True
+                    ip_number = int(match2.group(0))  # Преобразуем в число
 
-                        ip_number = int(match2.group(0))  # Преобразуем в число
-
-                        # Вызов функции process_numbers
-                        try:
-                            result = process_numbers(soc_number, ip_number, start_date)
-                                
-                            # Ищем элемент <input type="text"> внутри переданного элемента
-                            #text_input = input.query_selector("input[type='text']")
-                            text_inputs = input.query_selector_all("input")
-                            for text_input in text_inputs:
-                                input_id = text_input.get_attribute("id")
-
-                                # Вставляем переменные напрямую в JavaScript-код
-                                js_code = f"""
-                                    const escapedId = CSS.escape("{input_id}");
-                                    const inputElement = document.querySelector(`#${{escapedId}}`);
-                                    inputElement.value = {result};
-                                """
-
-                                # Выполняем JavaScript на странице
-                                page.evaluate(js_code)
-
-                        except ValueError as e:
-                            raise Exception(f"Ошибка: {e}")
+                    # Вызов функции process_numbers
+                    try:
+                        result = process_numbers(soc_number, ip_number, start_date)
                             
-                    print("Страница заполнена")
+                        # Ищем элемент <input type="text"> внутри переданного элемента
+                        #text_input = input.query_selector("input[type='text']")
+                        text_inputs = input.query_selector_all("input")
+                        for text_input in text_inputs:
+                            input_id = text_input.get_attribute("id")
 
-            else:
-                print("Таблица для заполнения не найдена")
+                            # Вставляем переменные напрямую в JavaScript-код
+                            js_code = f"""
+                                const escapedId = CSS.escape("{input_id}");
+                                const inputElement = document.querySelector(`#${{escapedId}}`);
+                                inputElement.value = {result};
+                            """
 
-            # Временное сохранение страницы
-            page.click("a#ctl00_cph_UF1_TopStr5_lbtnTopStr_Save")
+                            # Выполняем JavaScript на странице
+                            page.evaluate(js_code)
+
+                    except ValueError as e:
+                        raise Exception(f"Ошибка: {e}")
+                        
+                print("Страница заполнена")
+
+        else:
+            print("Таблица для заполнения не найдена")
+
+        # Временное сохранение страницы
+        # Ждём появления кнопки с таймаутом 5 секунд
+        start_time = time.time()
+        save_button = None
+        
+        while time.time() - start_time < 5:  # 5 секунд
+            save_button = page.query_selector("a#ctl0_cph_UF1_TopStr5_lbtnTopStr_Save")
+            if save_button:
+                break
+            time.sleep(0.5)  # Проверяем каждые 0.5 секунды
+
+        if save_button:
+            save_button.click()
             print("Ждем кнопку сохранить")
 
             # Ожидаем появления всплывающего окна и нажимаем "ОК", если оно появилось
@@ -555,7 +604,7 @@ def edit_page(page: Page, start_date): #Редактирование табли�
 
             start_time = time.time()
             button = None
-
+            
             while time.time() - start_time < 3:  # 3 секунд
                 button = page.query_selector("button.ui-corner-all.asp-button.small")
                 if button:
@@ -567,15 +616,8 @@ def edit_page(page: Page, start_date): #Редактирование табли�
                 print("Кнопка 'Ок' появилась. Нажата.")
             else:
                 print("Кнопка 'Ок' не появилась. Продолжаем выполнение.")
-
-            # Переходим на следующую страницу
-            next_page = page.query_selector('a[title="Перейти на следующую страницу"]')
-            if next_page and i == 0:
-                id_value = next_page.get_attribute('id')
-                page.click(f'#{id_value}')
-                print(f"Переход на следующую страницу")
-
-            #page.wait_for_timeout(3000)
+        else:
+            print("Кнопка сохранения не появилась. Продолжаем выполнение.")
 
         # Сохранение и выход
         page.click("#ctl00_cph_UF1_TopStr5_lbtnTopStr_SaveExit")
@@ -601,17 +643,20 @@ def nach_page(page: Page):
         print(f"Выбор процесса расчет активирован") 
         page.wait_for_selector('#ctl00_cph_pw_divNach > div.spPopup > table')
         page.click("#ctl00_cph_pw_divNach_ctl05_btnOk")
-        print(f"Расчет запущен") 
+        print(f"Расчет запущен")
 
-        newtable = page.wait_for_selector('#ctl00_cph_USLRASH1_grRashView', timeout=3000)
-        if newtable:
-            print(f"Расчет окончен") 
+        # Проверяем, что страница не закрыта перед ожиданием элемента
+        if page.query_selector('#ctl00_cph_USLRASH1_grRashView'):
+            newtable = page.wait_for_selector('#ctl00_cph_USLRASH1_grRashView', timeout=30000)  # Увеличен таймаут до 30 секунд
+            if newtable:
+                print(f"Расчет окончен")
 
-            # Получаем сумму оказаных услуг
-            element = page.locator("#igtxtctl00_cph_USLRASH1_grRashView_ctl02_grRashView2_ctl02_wneSumTarIP3")
-            # Получаем значение атрибута title
-            title_text = element.get_attribute("title")
-            print(title_text)
+                # Получаем сумму оказаных услуг
+                element = page.locator("#igtxtctl00_cph_USLRASH1_grRashView_ctl02_grRashView2_ctl02_wneSumTarIP3")
+                # Получаем значение атрибута title
+                title_text = element.get_attribute("title")
+                print(title_text)
+        else:
+            print("Элемент расчета не найден, возможно страница изменилась или закрылась")
 
         return page
-
