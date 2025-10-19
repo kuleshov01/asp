@@ -182,25 +182,39 @@ with sync_playwright() as p:
                         else:
                             print("У заявителя уже имеется заполненый договор")
                         not_end = False
-                        while True:
-                            
-                            page, not_end = select_date(page)
-                            if not_end: #Если заявления уже заполнено, то событие завершается
-                                page, error = edit_page(page, record['взяли на обслуживание '])
+                        try:
+                            while True:
+                                
+                                page, not_end = select_date(page)
+                                if not_end: #Если заявления уже заполнено, то событие завершается
+                                    page, error = edit_page(page, record['взяли на обслуживание '])
 
-                                # Если edit_page выполнена успешно, выходим из цикла while
-                                if error is None:
-                                    break
+                                    # Если edit_page выполнена успешно, выходим из цикла while
+                                    if error is None:
+                                        break
 
-                                print(f"Перезапуск процесса для записи {record['фио ']}")
+                                    print(f"Перезапуск процесса для записи {record['фио ']}")
 
-                            break
-                        if not_end:
-                            page = nach_page(page)
+                                break
+                            if not_end:
+                                page = nach_page(page)
+                        except Exception as e:
+                            print(f"Ошибка при обработке заявления {record['фио ']}: {e}")
+                            # Возвращаемся к списку заявлений и продолжаем следующей записи
+                            try:
+                                page.goto("http://localhost/aspnetkp/Common/ListDeclaration.aspx?GSP=25")
+                            except:
+                                print("Не удалось вернуться к списку заявлений")
+                            continue
 
-                        record[month] = '!' 
-                        page.click("#ctl00_cph_TopStr1_lbtnTopStr_SaveExit")
-                        print(f"Выход из страницы заявления") 
+                        record[month] = '!'
+                        # Ждем появления элемента сохранения и кликаем по нему
+                        try:
+                            page.wait_for_selector("#ctl00_cph_TopStr1_lbtnTopStr_SaveExit", timeout=10000)
+                            page.click("#ctl00_cph_TopStr1_lbtnTopStr_SaveExit")
+                            print(f"Выход из страницы заявления")
+                        except:
+                            print("Элемент сохранения не найден, возможно страница уже изменилась")
                         df = df_replace(df, record)
                 except Exception as e:
                     print(f"Ошибка при обработке записи {record['фио ']}: {e}")

@@ -431,10 +431,12 @@ def select_date(page: Page): #Ввод даты и месяца
         print("Переход на страницу с заполнением")
         
         # Проверяем, что страница не закрыта и элемент существует
-        if page.query_selector('#ctl00_cph_UF1_btnChangeGridToTabel'):
-            page.wait_for_selector('#ctl00_cph_UF1_btnChangeGridToTabel')
+        # Используем более надежный способ проверки наличия элемента
+        try:
+            # Ждем появления элемента с таймаутом 10 секунд
+            page.wait_for_selector('#ctl00_cph_UF1_btnChangeGridToTabel', timeout=10000)
+            
             # Получаем все строки, которые не являются заголовками
-
             print("Поиск таблицы")
             rows = page.query_selector_all('#ctl00_cph_UF1_pnlUslFakt > table > tbody > tr:not(.RS_GridHeader2)')
             if len(rows) > 0:
@@ -443,35 +445,37 @@ def select_date(page: Page): #Ввод даты и месяца
                 print("Таблица не найдена, заполняем")
                 
                 # Проверяем существование элемента перед кликом
-                if page.query_selector('#ctl00_cph_UF1_btnlbtnHeaderAddUsl'):
-                    # Пытаемся дождаться элемента и кликнуть по нему
-                    page.wait_for_selector('#ctl00_cph_UF1_btnlbtnHeaderAddUsl')
+                try:
+                    page.wait_for_selector('#ctl00_cph_UF1_btnlbtnHeaderAddUsl', timeout=5000)
                     page.click('#ctl00_cph_UF1_btnlbtnHeaderAddUsl')
+                except:
+                    print("Элемент #ctl00_cph_UF1_btnlbtnHeaderAddUsl не найден или недоступен")
             
-            # Проверяем существование элемента перед кликом
-            if page.query_selector('#ctl00_cph_UF1_btnChangeGridToTabel'):
-                # Нажимаем на кнопку
-                page.click('#ctl00_cph_UF1_btnChangeGridToTabel')
+            # Нажимаем на кнопку
+            page.click('#ctl00_cph_UF1_btnChangeGridToTabel')
 
-                # Ожидаем появления кнопки "Ок" и нажимаем на неё, если она появилась
+            # Ожидаем появления кнопки "Ок" и нажимаем на неё, если она появилась
 
-                # Ждём появления кнопки с таймаутом 5 секунд
-                start_time = time.time()
-                button = None
-                
-                while time.time() - start_time < 5:  # 5 секунд
-                    button = page.query_selector("#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button")
-                    if button:#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button
-                        break
-                    time.sleep(0.5)  # Проверяем каждые 0.5 секунды
+            # Ждём появления кнопки с таймаутом 5 секунд
+            start_time = time.time()
+            button = None
+            
+            while time.time() - start_time < 5:  # 5 секунд
+                button = page.query_selector("#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button")
+                if button:#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button
+                    break
+                time.sleep(0.5)  # Проверяем каждые 0.5 секунды
 
-                if button:
-                    button.click()
-                    print("Кнопка 'Ок' появилась. Нажата.")
-                else:
-                    print("Кнопка 'Ок' не появилась. Продолжаем выполнение.")
-        else:
-            print("Элемент для перехода на страницу с заполнением не найден. Пропускаем шаг.")
+            if button:
+                button.click()
+                print("Кнопка 'Ок' появилась. Нажата.")
+            else:
+                print("Кнопка 'Ок' не появилась. Продолжаем выполнение.")
+            
+            # После клика по кнопке изменения таблицы нужно немного подождать, чтобы страница обновилась
+            page.wait_for_timeout(2000)
+        except:
+            print("Элемент ctl00_cph_UF1_btnChangeGridToTabel для перехода на страницу с заполнением не найден. Пропускаем шаг.")
             return page, False
 
 
@@ -582,7 +586,7 @@ def edit_page(page: Page, start_date): #Редактирование табли�
         save_button = None
         
         while time.time() - start_time < 5:  # 5 секунд
-            save_button = page.query_selector("a#ctl0_cph_UF1_TopStr5_lbtnTopStr_Save")
+            save_button = page.query_selector("a#ctl00_cph_UF1_TopStr5_lbtnTopStr_Save")
             if save_button:
                 break
             time.sleep(0.5)  # Проверяем каждые 0.5 секунды
@@ -620,8 +624,13 @@ def edit_page(page: Page, start_date): #Редактирование табли�
             print("Кнопка сохранения не появилась. Продолжаем выполнение.")
 
         # Сохранение и выход
-        page.click("#ctl00_cph_UF1_TopStr5_lbtnTopStr_SaveExit")
-        print("Сохранение и выход")
+        # Ждем появления элемента сохранения и кликаем по нему
+        try:
+            page.wait_for_selector("#ctl00_cph_UF1_TopStr5_lbtnTopStr_SaveExit", timeout=10000)
+            page.click("#ctl00_cph_UF1_TopStr5_lbtnTopStr_SaveExit")
+            print("Сохранение и выход")
+        except:
+            print("Элемент сохранения не найден, возможно страница уже изменилась")
         expiration_date = None #Сбрасываем дату окончания для след людей
 
         return page, None
@@ -646,17 +655,38 @@ def nach_page(page: Page):
         print(f"Расчет запущен")
 
         # Проверяем, что страница не закрыта перед ожиданием элемента
-        if page.query_selector('#ctl00_cph_USLRASH1_grRashView'):
+        try:
+            # Ждем появления таблицы расчета с таймаутом
             newtable = page.wait_for_selector('#ctl00_cph_USLRASH1_grRashView', timeout=30000)  # Увеличен таймаут до 30 секунд
             if newtable:
                 print(f"Расчет окончен")
-
-                # Получаем сумму оказаных услуг
-                element = page.locator("#igtxtctl00_cph_USLRASH1_grRashView_ctl02_grRashView2_ctl02_wneSumTarIP3")
+        
+                # Ждем, пока элемент с суммой станет доступен
+                element = page.wait_for_selector("#igtxtctl00_cph_USLRASH1_grRashView_ctl02_grRashView2_ctl02_wneSumTarIP3", timeout=10000)
                 # Получаем значение атрибута title
                 title_text = element.get_attribute("title")
                 print(title_text)
-        else:
+        except:
             print("Элемент расчета не найден, возможно страница изменилась или закрылась")
 
         return page
+
+def remove_middle_name(full_name):
+    """
+    Удаляет отчество из ФИО для корейских имен.
+    Если в строке содержится корейское имя (определяется по наличию кириллических символов и структуре),
+    удаляет среднюю часть (отчество) из ФИО, оставляя только имя и фамилию.
+    """
+    # Разбиваем строку на части
+    parts = full_name.strip().split()
+    
+    # Если в ФИО 3 части (Фамилия Имя Отчество), проверяем, является ли это корейским именем
+    if len(parts) == 3:
+        # Простая проверка: если все три части содержат кирилические символы
+        has_cyrillic = [bool(re.search(r'[а-яё]', part.lower())) for part in parts]
+        if all(has_cyrillic):
+            # Возвращаем фамилию и имя, удаляя отчество
+            return f"{parts[0]} {parts[1]}"
+    
+    # Если это не корейское имя или структура отличается, возвращаем оригинальное имя
+    return full_name
