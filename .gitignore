@@ -1,0 +1,10 @@
+# Excel files
+*.xlsx
+*.xls
+*.xlsm
+
+# Session data
+session_data.json
+
+# Environment specific files
+.env

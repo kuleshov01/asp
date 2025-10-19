@@ -7,7 +7,7 @@ from datetime import datetime
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 # Указываем путь к файлу и название листа
-file_path = 'СПИСОК ДЕТЕЙ МИНСОЦ 2025.xlsx'
+file_path = 'data/СПИСОК ДЕТЕЙ МИНСОЦ 2025.xlsx'
 sheet_name = 'Список детей 2025'
 year = 2025
 

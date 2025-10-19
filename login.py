@@ -26,18 +26,18 @@ df = None
 # Ваши учетные данные
 LOGIN = "SAV"
 PASSWORD = "08082022"
-SESSION_FILE = "session_data.json"
+SESSION_FILE = "data/session_data.json"
 
 def save_session(page):
     """Сохраняет cookies в файл."""
     cookies = page.context.cookies()
-    with open("session.json", "w") as file:
+    with open("data/session.json", "w") as file:
         json.dump(cookies, file)
 
 def load_session(context):
     """Загружает cookies из файла."""
-    if os.path.exists("session.json"):
-        with open("session.json", "r") as file:
+    if os.path.exists("data/session.json"):
+        with open("data/session.json", "r") as file:
             cookies = json.load(file)
             print(cookies)
         context.add_cookies(cookies)
