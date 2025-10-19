@@ -85,73 +85,27 @@ def _init_dates():
         'start_month_datetime': start
     }
 
-# Инициализация переменных при импорте
-if config.month:
-    dates = _init_dates()
-    month = dates['month']
-    data_month = dates['data_month']
-    day_of_month = dates['day_of_month']
-    nach_year = dates['nach_year']
-    nach_month = dates['nach_month']
-    start_month_datetime = dates['start_month_datetime']
-else:
-    raise ValueError("Невозможно сформировать переменные для месяца")
+# Импортируем переменные из config
+try:
+    month = config.month_full
+    data_month = config.data_month
+    day_of_month = config.day_of_month
+    nach_year = config.nach_year
+    nach_month = config.nach_month
+    start_month_datetime = config.start_month_datetime
+except AttributeError:
+    # Если переменные не определены в config, используем функцию _init_dates
+    if config.month:
+        dates = _init_dates()
+        month = dates['month']
+        data_month = dates['data_month']
+        day_of_month = dates['day_of_month']
+        nach_year = dates['nach_year']
+        nach_month = dates['nach_month']
+        start_month_datetime = dates['start_month_datetime']
+    else:
+        raise ValueError("Невозможно сформировать переменные для месяца")
 
-month = 'Сентябрь 2025'
-data_month = '30.09.2025'
-day_of_month = '30'
-nach_year = "2025"
-nach_month = "09.2025"
-start_month_datetime = datetime(2025, 9, 1)
-
-#month = 'Август 2025'
-#data_month = '31.08.2025'
-#day_of_month = '31'
-#nach_year = "2025"
-#nach_month = "08.2025"
-#start_month_datetime = datetime(2025, 8, 1)
-
-#month = 'Июль 2025'
-#data_month = '31.07.2025'
-#day_of_month = '31'
-#nach_year = "2025"
-#nach_month = "07.2025"
-#start_month_datetime = datetime(2025, 7, 1)
-
-#month = 'Май 2025'
-#data_month = '31.05.2025'
-#day_of_month = '31'
-#nach_year = "2025"
-#nach_month = "05.2025"
-#start_month_datetime = datetime(2025, 5, 1)
-
-#month = 'Апрель 2025'
-#data_month = '30.04.2025'
-#day_of_month = '30'
-#nach_year = "2025"
-#nach_month = "04.2025"
-#start_month_datetime = datetime(2025, 4, 1)
-
-#month = 'Март 2025'
-#data_month = '31.03.2025'
-#day_of_month = '31'
-#nach_year = "2025"
-#nach_month = "03.2025"
-#start_month_datetime = datetime(2025, 3, 1)
-
-#month = 'Февраль 2025'
-#data_month = '28.02.2025'
-#day_of_month = '28'
-#nach_year = "2025"
-#nach_month = "02.2025"
-#start_month_datetime = datetime(2025, 2, 1)
-
-#month = 'Январь 2025'
-#data_month = '31.01.2025'
-#day_of_month = '31'
-#nach_year = "2025"
-#nach_month = "01.2025"
-#start_month_datetime = datetime(2025, 1, 1)
 
 def calc_work(start_date, rounded_plan):
     global start_month_datetime

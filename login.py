@@ -11,6 +11,17 @@ import config
 
 month = config.month
 
+# Выводим рассчитанные параметры
+print("Рассчитанные параметры:")
+print(f"  month_full: {config.month_full}")
+print(f"  data_month: {config.data_month}")
+print(f"  day_of_month: {config.day_of_month}")
+print(f"  nach_year: {config.nach_year}")
+print(f"  nach_month: {config.nach_month}")
+print(f" start_month_datetime: {config.start_month_datetime}")
+print()
+
+
 df = None
 # Ваши учетные данные
 LOGIN = "SAV"
