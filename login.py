@@ -255,5 +255,5 @@ with sync_playwright() as p:
     finally:
         # Закрытие браузера
         browser.close()
-        print("Скрипт завершается...")
         sys.exit(0)
+        print("Скрипт завершается...")

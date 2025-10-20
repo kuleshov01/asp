@@ -338,15 +338,36 @@ def new_dogovor(page: Page, take_serv, number_doc):
             else:
                 print(f"Номер договора: {number_doc}")
         
+        #Почему-то с первого раза не сохраняется
+        page.click("#ctl00_cph_LB_Save")
+        page.wait_for_timeout(2000)
+        page.click("#ctl00_cph_LB_Save")
+        page.wait_for_timeout(2000)
+        page.click("#ctl00_cph_LB_Save")
         
-        # Добавляем проверку, что элементы существуют перед взаимодействием
-
-        page.click("#ctl00_cph_LB_Save")
-        page.click("#ctl00_cph_LB_Save")
-        #page.wait_for_timeout(5000)
-        page.click("#ctl00_cph_LB_Exit_Save_No")
-        page.click("#ctl00_cph_UslSogl_btnAddUslIP")
-        page.click("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit")
+        # Проверяем наличие и кликаем по кнопке выхода с сохранением
+        try:
+            page.wait_for_selector("#ctl00_cph_LB_Exit_Save_No", timeout=5000)
+            page.click("#ctl00_cph_LB_Exit_Save_No")
+        except:
+            print("Ошибка: элемент #ctl00_cph_LB_Exit_Save_No не найден или недоступен")
+            raise Exception("Отсутствует кнопка выхода с сохранением")
+        
+        # Проверяем наличие и кликаем по кнопке добавления услуг ИП
+        try:
+            page.wait_for_selector("#ctl00_cph_UslSogl_btnAddUslIP", timeout=5000)
+            page.click("#ctl00_cph_UslSogl_btnAddUslIP")
+        except:
+            print("Ошибка: элемент #ctl00_cph_UslSogl_btnAddUslIP не найден или недоступен")
+            raise Exception("Отсутствует кнопка добавления услуг ИП")
+        
+        # Проверяем наличие и кликаем по кнопке сохранения и выхода
+        try:
+            page.wait_for_selector("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit", timeout=5000)
+            page.click("#ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit")
+        except:
+            print("Ошибка: элемент #ctl00_cph_UslSogl_TopStr4_lbtnTopStr_SaveExit не найден или недоступен")
+            raise Exception("Отсутствует кнопка сохранения и выхода")
         
         print(f"Договор {number_doc} был заполнен")
         
