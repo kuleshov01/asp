@@ -1,5 +1,5 @@
 # Указываем месяц и год вручную
-month = 'октябрь'
+month = 'ноябрь'
 year = 2025  # Можно изменить на нужный год
 
 from datetime import datetime

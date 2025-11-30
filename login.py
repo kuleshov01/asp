@@ -228,6 +228,9 @@ with sync_playwright() as p:
                         df = df_replace(df, record)
                 except Exception as e:
                     print(f"Ошибка при обработке записи {record['фио ']}: {e}")
+                    # Проверяем, является ли ошибка связанной с NaT
+                    if "NaTType does not support strftime" in str(e) or pd.isna(record['взяли на обслуживание ']) or pd.isna(record['дата ипр']):
+                        print(f"Пропускаем запись {record['фио ']} из-за отсутствия даты (NaT)")
                     #traceback.print_exc()  # Печатает полный traceback
                     if page is not None:
                         page.goto("http://localhost/aspnetkp/Common/ListDeclaration.aspx?GSP=25")

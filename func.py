@@ -111,9 +111,13 @@ def calc_work(start_date, rounded_plan):
     global start_month_datetime
     global expiration_date
 
+    # Проверяем, что start_date не является NaT перед обработкой
+    if pd.isna(start_date):
+        raise ValueError("Дата начала обслуживания является NaT (Not a Time)")
+    
     if start_date < start_month_datetime:
         start_date = start_month_datetime
-    else: 
+    else:
         start_date = start_date.to_pydatetime()
 
     # Создаем календарь для учета праздников
@@ -206,6 +210,10 @@ def find_child(page: Page, status, start_date):
                     supplier = row.query_selector(f"td:nth-of-type({column_indices['Поставщик']})")
                     date = row.query_selector(f"td:nth-of-type({column_indices['Дата']})")
 
+                    # Проверяем, что start_date не является NaT перед форматированием
+                    if pd.isna(start_date):
+                        print(f"Пропускаем обработку, так как дата начала обслуживания является NaT")
+                        continue
                     date1 = start_date.strftime("%d.%m.%Y")
 
                     if supplier and date:
@@ -308,6 +316,10 @@ def new_dogovor(page: Page, take_serv, number_doc):
         end_date = date1 + relativedelta(years=1) - relativedelta(days=1) ## ИПР +год -1 день
         end_date = end_date.strftime("%d.%m.%Y")
 
+        # Проверяем, что take_serv не является NaT перед преобразованием
+        if pd.isna(take_serv):
+            print(f"Пропускаем обработку, так как дата начала обслуживания является NaT")
+            return page
         take_serv_as_dt = take_serv.to_pydatetime()
         # Выбираем бóльшую дату между date1 и take_serv, но не меньше февраля 2025
         new_date_dt = max(date1, take_serv_as_dt)  # Сначала берем позднюю из двух
@@ -578,6 +590,10 @@ def edit_page(page: Page, start_date): #Редактирование табли�
 
                     # Вызов функции process_numbers
                     try:
+                        # Проверяем, что start_date не является NaT перед передачей в функцию
+                        if pd.isna(start_date):
+                            print(f"Пропускаем обработку, так как дата начала обслуживания является NaT")
+                            continue
                         result = process_numbers(soc_number, ip_number, start_date)
                             
                         # Ищем элемент <input type="text"> внутри переданного элемента

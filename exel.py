@@ -88,7 +88,7 @@ def df_replace(df, record):
     # Обновляем данные в найденной строке
     for index, (key, value) in enumerate(record.items()):
 
-        if pd.isna(value):  # Проверка на NaN/None
+        if pd.isna(value):  # Проверка на NaN/None/NaT
             df.loc[mask, df.columns[index]] = np.nan
         #elif isinstance(value, (datetime, pd.Timestamp)):
             #breakpoint()
