@@ -8,6 +8,9 @@ import traceback
 import math
 import config
 
+# Опциональное имя для тестовой обработки одного человека (оставьте пустым для обработки всех)
+TEST_PERSON_NAME = "Ярулин Ярослав"  # Установите ФИО конкретного человека для тестовой обработки, например "Иванов Иван Иванович"
+
 
 month = config.month
 
@@ -17,8 +20,20 @@ print(f"  month_full: {config.month_full}")
 print(f"  data_month: {config.data_month}")
 print(f"  day_of_month: {config.day_of_month}")
 print(f"  nach_year: {config.nach_year}")
-print(f"  nach_month: {config.nach_month}")
+print(f" nach_month: {config.nach_month}")
 print(f" start_month_datetime: {config.start_month_datetime}")
+
+# Если установлена пользовательская дата окончания, выводим её
+if hasattr(config, 'custom_expiration_date') and config.custom_expiration_date is not None:
+    print(f"  custom_expiration_date: {config.custom_expiration_date}")
+
+print()
+
+# Устанавливаем пользовательскую дату окончания, если она определена в конфиге
+if hasattr(config, 'custom_expiration_date') and config.custom_expiration_date is not None:
+    from func import expiration_date
+    expiration_date = config.custom_expiration_date
+    print(f"Установлена пользовательская дата окончания: {expiration_date}")
 print()
 
 
@@ -133,8 +148,18 @@ with sync_playwright() as p:
         #records = [entry for entry in records if 'Бадыкшанова Анна' in entry['фио ']] #DEBUG#  
 
         if records:
+            # Если задано TEST_PERSON_NAME, фильтруем записи, чтобы обрабатывать только одного человека
+            if TEST_PERSON_NAME:
+                records = [record for record in records if TEST_PERSON_NAME.lower() in record['фио '].lower()]
+                if not records:
+                    print(f"Не найдено записей для {TEST_PERSON_NAME}")
+                    sys.exit(0)
+                print(f"Найдена запись для тестовой обработки: {TEST_PERSON_NAME}")
+            else:
+                print(f"Найдено {len(records)} записей для обработки")
+            
             # Пример вывода одного элемента
-            for i, record in enumerate(records):  # Идем с конца массива, чтобы избежать проблем с индексацией при удалении элементов
+            for i, record in enumerate(records): # Идем с конца массива, чтобы избежать проблем с индексацией при удалении элементов
                 try:
                     if record[month] != '!':
                         # Применяем функцию для удаления отчества из корейских имен

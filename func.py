@@ -75,11 +75,27 @@ def _init_dates():
     else:
         end = datetime(year, month_num + 1, 1) - timedelta(days=1)
 
+    # Проверяем, установлена ли пользовательская дата окончания
+    if hasattr(config, 'custom_expiration_date') and config.custom_expiration_date is not None:
+        try:
+            # Если установлена пользовательская дата, используем её для day_of_month
+            custom_date_obj = datetime.strptime(config.custom_expiration_date, '%d.%m.%Y')
+            day = custom_date_obj.day
+            data_month = custom_date_obj.strftime("%d.%m.%Y")
+        except ValueError:
+            # Если формат даты неправильный, используем стандартные значения
+            day = end.strftime("%d")
+            data_month = end.strftime("%d.%m.%Y")
+    else:
+        # Используем стандартные значения
+        day = end.strftime("%d")
+        data_month = end.strftime("%d.%m.%Y")
+
     # Возвращаем результаты
     return {
         'month': f"{month_names[month_num]} {year}",
-        'data_month': end.strftime("%d.%m.%Y"),
-        'day_of_month': end.strftime("%d"),
+        'data_month': data_month,
+        'day_of_month': str(day),
         'nach_year': str(year),
         'nach_month': end.strftime("%m.%Y"),
         'start_month_datetime': start
@@ -93,6 +109,7 @@ try:
     nach_year = config.nach_year
     nach_month = config.nach_month
     start_month_datetime = config.start_month_datetime
+    custom_expiration_date = config.custom_expiration_date
 except AttributeError:
     # Если переменные не определены в config, используем функцию _init_dates
     if config.month:
@@ -103,8 +120,22 @@ except AttributeError:
         nach_year = dates['nach_year']
         nach_month = dates['nach_month']
         start_month_datetime = dates['start_month_datetime']
+        # Проверяем наличие пользовательской даты окончания
+        custom_expiration_date = getattr(config, 'custom_expiration_date', None)
     else:
         raise ValueError("Невозможно сформировать переменные для месяца")
+
+# Если задана пользовательская дата окончания, используем её
+if custom_expiration_date is not None:
+    expiration_date = custom_expiration_date
+    # Обновляем day_of_month на основе пользовательской даты
+    from datetime import datetime
+    try:
+        custom_date_obj = datetime.strptime(custom_expiration_date, '%d.%m.%Y')
+        new_day_of_month = str(custom_date_obj.day)
+    except ValueError:
+        # Если формат даты неправильный, оставляем значение как есть
+        pass
 
 
 def calc_work(start_date, rounded_plan):
@@ -123,19 +154,20 @@ def calc_work(start_date, rounded_plan):
     # Создаем календарь для учета праздников
     cal = RussiaWithTransfers()
 
-    # Определяем конец месяца
-    if start_month_datetime.month == 12:
-        end_month = datetime(start_month_datetime.year + 1, 1, 1)
-    else:
-        end_month = datetime(start_month_datetime.year, start_month_datetime.month + 1, 1)
-    end_month -= timedelta(days=1)  # последний день месяца
-
-    # Рассчитываем все рабочие дни месяца
-    all_work_days = cal.get_working_days_delta(start_month_datetime, end_month)
-    
-    #проверка если месяц не полный
+    # Определяем конец периода - либо последний день месяца, либо пользовательская дата окончания
     if expiration_date is not None:
-        end_month = datetime.strptime(expiration_date, '%d.%m.%Y') 
+        # Используем пользовательскую дату окончания, если она задана
+        end_month = datetime.strptime(expiration_date, '%d.%m.%Y')
+    else:
+        # В противном случае используем последний день месяца
+        if start_month_datetime.month == 12:
+            end_month = datetime(start_month_datetime.year + 1, 1, 1)
+        else:
+            end_month = datetime(start_month_datetime.year, start_month_datetime.month + 1, 1)
+        end_month -= timedelta(days=1)  # последний день месяца
+
+    # Рассчитываем все рабочие дни в периоде
+    all_work_days = cal.get_working_days_delta(start_month_datetime, end_month)
 
     # Рассчитываем рабочие дни с даты начала обслуживания
     actual_work_days = cal.get_working_days_delta(start_date, end_month)
@@ -405,8 +437,18 @@ def select_date(page: Page): #Ввод даты и месяца
         global expiration_date
 
         select_month = month.lower()
-        select_data_month = data_month
-        new_day_of_month = day_of_month
+        # Проверяем, установлена ли переменная custom_expiration_date, используем её вместо автоматического конца месяца
+        select_data_month = expiration_date if expiration_date is not None else data_month
+        # Обновляем new_day_of_month, если задана пользовательская дата окончания
+        if expiration_date is not None:
+            try:
+                custom_date_obj = datetime.strptime(expiration_date, '%d.%m.%Y')
+                new_day_of_month = str(custom_date_obj.day)
+            except ValueError:
+                # Если формат даты неправильный, используем стандартное значение
+                new_day_of_month = day_of_month
+        else:
+            new_day_of_month = day_of_month
 
         #Ждем поля ввода даты
         page.click('a#ctl00_cph_lbtnTabReshen')
@@ -453,7 +495,9 @@ def select_date(page: Page): #Ввод даты и месяца
         print("Ввод месяца и даты")
         print(f"Указываем дату окончания как {select_data_month}")
 
-        expiration_date = select_data_month
+        # Устанавливаем expiration_date, если она не была установлена ранее
+        if expiration_date is None:
+            expiration_date = select_data_month
     
         page.fill('#igtxtctl00_cph_grZayvView_ctl02_wdDatStart', month)
         page.fill('#igtxtctl00_cph_grZayvView_ctl02_wdtDatn', select_data_month)

@@ -1,6 +1,10 @@
 # Указываем месяц и год вручную
-month = 'ноябрь'
+month = 'декабрь'
 year = 2025  # Можно изменить на нужный год
+
+# Опциональная дата окончания для услуг (если не указана, используется последний день месяца)
+# Например, для использования 5 декабря: custom_expiration_date = '05.12.2025'
+custom_expiration_date = '05.12.2025'  # Установите значение в формате 'DD.MM.YYYY' для использования пользовательской даты
 
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -16,6 +20,7 @@ month_names = {
     5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
     9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
 }
+
 
 # Автоматический пересчет дат при изменении месяца
 def _init_dates():
@@ -37,11 +42,27 @@ def _init_dates():
     else:
         end = datetime(year, month_num + 1, 1) - relativedelta(days=1)
 
+    # Проверяем, установлена ли пользовательская дата окончания
+    if 'custom_expiration_date' in globals() and custom_expiration_date is not None:
+        try:
+            # Если установлена пользовательская дата, используем её для day_of_month
+            custom_date_obj = datetime.strptime(custom_expiration_date, '%d.%m.%Y')
+            day = custom_date_obj.day
+            data_month = custom_date_obj.strftime("%d.%m.%Y")
+        except ValueError:
+            # Если формат даты неправильный, используем стандартные значения
+            day = end.strftime("%d")
+            data_month = end.strftime("%d.%m.%Y")
+    else:
+        # Используем стандартные значения
+        day = end.strftime("%d")
+        data_month = end.strftime("%d.%m.%Y")
+
     # Возвращаем результаты
     return {
         'month_full': f"{month_names[month_num]} {year}",
-        'data_month': end.strftime("%d.%m.%Y"),
-        'day_of_month': end.strftime("%d"),
+        'data_month': data_month,
+        'day_of_month': str(day),
         'nach_year': str(year),
         'nach_month': end.strftime("%m.%Y"),
         'start_month_datetime': start
