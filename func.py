@@ -550,6 +550,38 @@ def select_date(page: Page): #Ввод даты и месяца
             rows = page.query_selector_all('#ctl00_cph_UF1_pnlUslFakt > table > tbody > tr:not(.RS_GridHeader2)')
             if len(rows) > 0:
                 print("Таблица найдена!")
+                
+                # Проверяем, что флаг перезаписи активен, и если да - выполняем удаление всех записей
+                import config
+                if hasattr(config, 'recalculate_month') and config.recalculate_month:
+                    print("Флаг перезаписи активен - удаляем все записи и загружаем новый список")
+                    print("Таблица найдена, начинаем процесс перезаписи")
+                    
+                    # Кликаем по меню для выбора всех записей
+                    page.click('#ctl00_cph_UF1_grUslFaktView_ctl01_mnuMark > li > div')
+                    
+                    # Выбираем "Выбрать все" из выпадающего списка
+                    page.click('div.ui-menu-item-wrapper:has-text("Выбрать все")')
+                    print(0)
+
+                    # Удаляем все выбранные строки
+                    page.evaluate('document.querySelector("#ctl00_cph_UF1_lbtnDeleteRow_AllTabel").click()')
+                    print(1)
+                    breakpoint()
+                    
+                    # Нажимаем на кнопку добавления новой услуги
+                    try:
+                        page.wait_for_selector('#ctl00_cph_UF1_btnlbtnHeaderAddUsl', timeout=5000)
+                        page.click('#ctl00_cph_UF1_btnlbtnHeaderAddUsl')
+
+                        # Нажимаем снова на кнопку изменения таблицы
+                        page.click('#ctl00_cph_UF1_btnChangeGridToTabel')
+                        print(2)
+                        
+                        # Ждем немного, чтобы таблица обновилась
+                        page.wait_for_timeout(200)
+                    except:
+                        print("Элемент #ctl00_cph_UF1_btnlbtnHeaderAddUsl не найден или недоступен, продолжаем выполнение")
             else:
                 print("Таблица не найдена, заполняем")
                 
