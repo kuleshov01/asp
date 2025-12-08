@@ -7,6 +7,7 @@ import pandas as pd
 import time
 import numpy as np
 from workalendar.europe import Russia  # для учета российских праздников
+
 import config, sys
 import pdb
 
@@ -146,6 +147,9 @@ def calc_work(start_date, rounded_plan):
     if pd.isna(start_date):
         raise ValueError("Дата начала обслуживания является NaT (Not a Time)")
     
+    # Обязательно, так как в стардату я отправляю дату обсуживания, если меньше, начит прошлый месяц и можно считать с 1 дня, в противном случае с даты начала
+    # По хорошему эту проверку бы просто бахнуть в поле другом - подумать
+
     if start_date < start_month_datetime:
         start_date = start_month_datetime
     else:
@@ -153,6 +157,13 @@ def calc_work(start_date, rounded_plan):
 
     # Создаем календарь для учета праздников
     cal = RussiaWithTransfers()
+
+    # Определяем последний день месяца
+
+    if start_month_datetime.month == 12:
+        finish_end_month = datetime(start_month_datetime.year + 1, 1, 1)
+    else:
+        finish_end_month = datetime(start_month_datetime.year, start_month_datetime.month + 1, 1)
 
     # Определяем конец периода - либо последний день месяца, либо пользовательская дата окончания
     if expiration_date is not None:
@@ -166,15 +177,15 @@ def calc_work(start_date, rounded_plan):
             end_month = datetime(start_month_datetime.year, start_month_datetime.month + 1, 1)
         end_month -= timedelta(days=1)  # последний день месяца
 
-    # Рассчитываем все рабочие дни в периоде
-    all_work_days = cal.get_working_days_delta(start_month_datetime, end_month)
-
-    # Рассчитываем рабочие дни с даты начала обслуживания
-    actual_work_days = cal.get_working_days_delta(start_date, end_month)
+    # Рассчитываем все рабочие дни в месяце/периоде (от начала до конца)
+    total_work_days_in_period = cal.get_working_days_delta(start_month_datetime, finish_end_month)
     
-    # Рассчитываем процент отработанных дней
-    if all_work_days > 0:
-        percentage = actual_work_days / all_work_days
+    # Рассчитываем количество рабочих дней от даты начала обслуживания до конца месяца/периода
+    remaining_work_days = cal.get_working_days_delta(start_date, end_month)
+    
+    # Рассчитываем процент оставшихся рабочих дней от общего количества рабочих дней в периоде
+    if total_work_days_in_period > 0:
+        percentage = remaining_work_days / total_work_days_in_period
     else:
         percentage = 1 # если месяц без рабочих дней (крайний случай)
     
@@ -191,17 +202,26 @@ def process_numbers(plan, actual, date_start):
     if actual == 0:
         raise ValueError("Фактическое число ИП не может быть равно нулю.")
 
-    if plan == 84: 
-        return 28
+    if plan == 84:
+        return calc_work(date_start, plan / 3)
     
-    rounded_plan = math.ceil(plan / 3)
-
-    if rounded_plan >= actual:
-        return calc_work(date_start, actual)
+    # Рассчитываем месячный план из 3-месячного
+    monthly_plan = math.ceil(plan / 3)
+    
+    # Если это не первый месяц обслуживания, уменьшаем план на 1
+    if start_obsl > 1:
+        monthly_plan = monthly_plan - 1
+    
+    # Сравниваем системное предложение (actual) с рассчитанным месячным планом
+    # Используем меньшее значение
+    if actual <= monthly_plan:
+        target_plan = actual
     else:
-        if start_obsl > 1:
-            rounded_plan = rounded_plan - 1
-        return calc_work(date_start, rounded_plan)
+        target_plan = monthly_plan
+    
+    # Рассчитываем, сколько из плана нужно выполнить
+    # за оставшиеся рабочие дни месяца
+    return calc_work(date_start, target_plan)
 
 def find_child(page: Page, status, start_date):
     if page:
@@ -489,8 +509,22 @@ def select_date(page: Page): #Ввод даты и месяца
             if date_match:
                 result = date_match.group(1)
                 if result == select_month:
-                    print("У заявления уже были начисления в этом месяце") 
-                    return page, False
+                    # Проверяем флаг пересчета из конфига
+                    import config
+                    if hasattr(config, 'recalculate_month') and config.recalculate_month:
+                        print("У заявления уже были начисления в этом месяце, но флаг пересчета установлен - продолжаем")
+                        # Переходим на вкладку начислений
+                        page.click("#ctl00_cph_lbtnTabNach")
+                        # Кликаем по кнопке удаления начислений
+                        page.click("#ctl00_cph_lbDelNach442")
+                        # Ждем загрузки диалогового окна и кликаем по кнопке
+                        page.wait_for_selector("#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button:nth-child(1)", timeout=1000)
+                        page.click("#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button:nth-child(1)")
+                        # Возвращаемся на вкладку решений
+                        page.click("#ctl00_cph_lbtnTabReshen")
+                    else:
+                        print("У заявления уже были начисления в этом месяце")
+                        return page, False
 
         print("Ввод месяца и даты")
         print(f"Указываем дату окончания как {select_data_month}")
@@ -503,11 +537,6 @@ def select_date(page: Page): #Ввод даты и месяца
         page.fill('#igtxtctl00_cph_grZayvView_ctl02_wdtDatn', select_data_month)
         page.click('#ctl00_cph_grZayvView_ctl02_lbtnEditFaktUsl')
 
-        #если вдруг будет вспылвающее окно после нажатия на карандашик! Но не должно быть
-        #found_windows = page.query_selector('#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable')
-        #if found_windows:
-        #    page.click("#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button")
-        
         print("Переход на страницу с заполнением")
         
         # Проверяем, что страница не закрыта и элемент существует
@@ -529,43 +558,58 @@ def select_date(page: Page): #Ввод даты и месяца
                     page.wait_for_selector('#ctl00_cph_UF1_btnlbtnHeaderAddUsl', timeout=5000)
                     page.click('#ctl00_cph_UF1_btnlbtnHeaderAddUsl')
                 except:
-                    print("Элемент #ctl00_cph_UF1_btnlbtnHeaderAddUsl не найден или недоступен")
+                    print("Элемент #ctl00_cph_UF1_btnlbtnHeaderAddUsl не найден или недоступен, продолжаем выполнение")
             
             # Нажимаем на кнопку
             page.click('#ctl00_cph_UF1_btnChangeGridToTabel')
 
-            # Ожидаем появления кнопки "Ок" и нажимаем на неё, если она появилась
-
-            # Ждём появления кнопки с таймаутом 5 секунд
-            start_time = time.time()
-            button = None
-            
-            while time.time() - start_time < 5:  # 5 секунд
-                button = page.query_selector("#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button")
-                if button:#ctl00_mBody > div.ui-dialog.ui-corner-all.ui-widget.ui-widget-content.ui-front.ui-dialog-buttons.ui-draggable.ui-resizable > div.ui-dialog-buttonpane.ui-widget-content.ui-helper-clearfix > div > button
-                    break
-                time.sleep(0.5)  # Проверяем каждые 0.5 секунды
-
-            if button:
-                button.click()
-                print("Кнопка 'Ок' появилась. Нажата.")
-            else:
-                print("Кнопка 'Ок' не появилась. Продолжаем выполнение.")
+            # Также проверяем наличие всплывающего окна с предупреждением о превышении ИППСУ
+            try:
+                # Ждем появления диалогового окна (всплывающего окна)
+                page.wait_for_selector("div.ui-dialog-content", timeout=3000)
+                
+                # Проверяем, содержит ли окно текст о превышении ИППСУ
+                dialog_content = page.query_selector("div.ui-dialog-content")
+                if dialog_content:
+                    content_text = dialog_content.inner_text().lower()
+                    if "иппсу" in content_text or "превыш" in content_text or "сохранение не выполнено" in content_text:
+                        print("Обнаружено всплывающее окно с предупреждением о превышении ИППСУ")
+                        
+                        # Ищем кнопку "Ок" во всплывающем окне
+                        ok_button = page.query_selector("button.ui-corner-all.asp-button.small")
+                        if ok_button:
+                            ok_button.click()
+                            print("Нажата кнопка 'Ок' во всплывающем окне с предупреждением о превышении ИППСУ")
+                        else:
+                            # Пробуем другие возможные селекторы для кнопки "Ок"
+                            possible_selectors = [
+                                "button:has-text('Ок')",
+                                "button:has-text('OK')",
+                                ".ui-dialog-buttonpane button",
+                                "div.ui-dialog-buttonpane button",
+                                "button.ui-button, button.ui-corner-all"
+                            ]
+                            
+                            for selector in possible_selectors:
+                                try:
+                                    ok_button = page.query_selector(selector)
+                                    if ok_button and ok_button.is_visible():
+                                        # Проверим текст кнопки для уверенности
+                                        button_text = ok_button.inner_text().strip().lower()
+                                        if 'ок' in button_text or 'ok' in button_text or 'применить' in button_text or 'подтвердить' in button_text:
+                                            ok_button.click()
+                                            print("Нажата кнопка 'Ок' во всплывающем окне с предупреждением")
+                                            break
+                                except:
+                                    continue
+            except:
+                print("Всплывающее окно с предупреждением о превышении ИППСУ не появилось или не дождались")
             
             # После клика по кнопке изменения таблицы нужно немного подождать, чтобы страница обновилась
             page.wait_for_timeout(2000)
         except:
             print("Элемент ctl00_cph_UF1_btnChangeGridToTabel для перехода на страницу с заполнением не найден. Пропускаем шаг.")
             return page, False
-
-
-        #try:
-        #    # Ждём появления кнопки с классом "ui-corner-all asp-button small"
-        #    button = page.wait_for_selector("button.ui-corner-all.asp-button.small", timeout=5000)  # timeout в миллисекундах
-        #    if button:
-        #except:
-        #    # Если кнопка не появилась, продолжаем выполнение
-        #    print("Кнопка 'Ок' не появилась. Продолжаем выполнение.")
 
         return page, True
 
@@ -596,7 +640,7 @@ def edit_page(page: Page, start_date): #Редактирование табли�
                 text = header.inner_text().strip().lower()  # Приводим текст к нижнему регистру
                 if "социальные услуги" in text:
                     column_indices["социальные услуги"] = idx + 1
-                elif new_day_of_month in text:
+                elif text.startswith(new_day_of_month.lower()):  # Проверяем, начинается ли текст с нужного дня месяца
                     column_indices[new_day_of_month] = idx + 1
                 elif "ип" in text:
                     column_indices["ип"] = idx + 1
@@ -639,8 +683,9 @@ def edit_page(page: Page, start_date): #Редактирование табли�
                             print(f"Пропускаем обработку, так как дата начала обслуживания является NaT")
                             continue
                         result = process_numbers(soc_number, ip_number, start_date)
+                        #print(ip_number, result)
                             
-                        # Ищем элемент <input type="text"> внутри переданного элемента
+                        # Ищем элемент <input type="textß"> внутри переданного элемента
                         #text_input = input.query_selector("input[type='text']")
                         text_inputs = input.query_selector_all("input")
                         for text_input in text_inputs:
@@ -679,40 +724,100 @@ def edit_page(page: Page, start_date): #Редактирование табли�
             save_button.click()
             print("Ждем кнопку сохранить")
 
-            # Ожидаем появления всплывающего окна и нажимаем "ОК", если оно появилось
-            #try:
-            #    # Ждём появления кнопки "ОК" в течение 3 секунд
-            #    button = page.wait_for_selector("button.ui-corner-all.asp-button.small", timeout=3000)
-            #    if button:
-            #        button.click()
-            #        print("Нажимаем ОК на всплывающей странице")
-            #except:
-            #    # Если кнопка не появилась, продолжаем выполнение
-            #    print("Всплывающее окно не появилось.")
-
-            start_time = time.time()
-            button = None
-            
-            while time.time() - start_time < 3:  # 3 секунд
-                button = page.query_selector("button.ui-corner-all.asp-button.small")
-                if button:
-                    break
-                time.sleep(0.5)  # Проверяем каждые 0.5 секунды
-
-            if button:
-                button.click()
-                print("Кнопка 'Ок' появилась. Нажата.")
-            else:
-                print("Кнопка 'Ок' не появилась. Продолжаем выполнение.")
+            # Улучшенный поиск всплывающего окна с предупреждением о превышении ИППСУ
+            # Сначала ждем появления всплывающего окна с текстом предупреждения
+            try:
+                # Ждем появления диалогового окна (всплывающего окна)
+                page.wait_for_selector("div.ui-dialog-content", timeout=3000)
+                
+                # Проверяем, содержит ли окно текст о превышении ИППСУ
+                dialog_content = page.query_selector("div.ui-dialog-content")
+                if dialog_content:
+                    content_text = dialog_content.inner_text().lower()
+                    if "иппсу" in content_text or "превыш" in content_text or "сохранение не выполнено" in content_text:
+                        print("Обнаружено всплывающее окно с предупреждением о превышении ИППСУ")
+                        
+                        # Ищем кнопку "Ок" во всплывающем окне
+                        ok_button = page.query_selector("button.ui-corner-all.asp-button.small")
+                        if ok_button:
+                            ok_button.click()
+                            print("Нажата кнопка 'Ок' во всплывающем окне с предупреждением о превышении ИППСУ")
+                        else:
+                            # Пробуем другие возможные селекторы для кнопки "Ок"
+                            possible_selectors = [
+                                "button:has-text('Ок')",
+                                "button:has-text('OK')",
+                                ".ui-dialog-buttonpane button",
+                                "div.ui-dialog-buttonpane button",
+                                "button.ui-button, button.ui-corner-all"
+                            ]
+                            
+                            for selector in possible_selectors:
+                                try:
+                                    ok_button = page.query_selector(selector)
+                                    if ok_button and ok_button.is_visible():
+                                        # Проверим текст кнопки для уверенности
+                                        button_text = ok_button.inner_text().strip().lower()
+                                        if 'ок' in button_text or 'ok' in button_text or 'применить' in button_text or 'подтвердить' in button_text:
+                                            ok_button.click()
+                                            print("Нажата кнопка 'Ок' во всплывающем окне с предупреждением")
+                                            break
+                                except:
+                                    continue
+            except:
+                print("Всплывающее окно с предупреждением о превышении ИППСУ не появилось или не дождались")
         else:
             print("Кнопка сохранения не появилась. Продолжаем выполнение.")
 
         # Сохранение и выход
         # Ждем появления элемента сохранения и кликаем по нему
         try:
-            page.wait_for_selector("#ctl00_cph_UF1_TopStr5_lbtnTopStr_SaveExit", timeout=10000)
+            page.wait_for_selector("#ctl00_cph_UF1_TopStr5_lbtnTopStr_SaveExit", timeout=100)
             page.click("#ctl00_cph_UF1_TopStr5_lbtnTopStr_SaveExit")
             print("Сохранение и выход")
+            
+            # После клика на "Сохранить и выйти" также может появиться всплывающее окно с предупреждением
+            try:
+                # Ждем появления диалогового окна (всплывающего окна)
+                page.wait_for_selector("div.ui-dialog-content", timeout=3000)
+                
+                # Проверяем, содержит ли окно текст о превышении ИППСУ
+                dialog_content = page.query_selector("div.ui-dialog-content")
+                if dialog_content:
+                    content_text = dialog_content.inner_text().lower()
+                    if "иппсу" in content_text or "превыш" in content_text or "сохранение не выполнено" in content_text:
+                        print("Обнаружено всплывающее окно с предупреждением о превышении ИППСУ после сохранения и выхода")
+                        
+                        # Ищем кнопку "Ок" во всплывающем окне
+                        ok_button = page.query_selector("button.ui-corner-all.asp-button.small")
+                        if ok_button:
+                            ok_button.click()
+                            print("Нажата кнопка 'Ок' во всплывающем окне с предупреждением после сохранения и выхода")
+                        else:
+                            # Пробуем другие возможные селекторы для кнопки "Ок"
+                            possible_selectors = [
+                                "button:has-text('Ок')",
+                                "button:has-text('OK')",
+                                ".ui-dialog-buttonpane button",
+                                "div.ui-dialog-buttonpane button",
+                                "button.ui-button, button.ui-corner-all"
+                            ]
+                            
+                            for selector in possible_selectors:
+                                try:
+                                    ok_button = page.query_selector(selector)
+                                    if ok_button and ok_button.is_visible():
+                                        # Проверим текст кнопки для уверенности
+                                        button_text = ok_button.inner_text().strip().lower()
+                                        if 'ок' in button_text or 'ok' in button_text or 'применить' in button_text or 'подтвердить' in button_text:
+                                            ok_button.click()
+                                            print("Нажата кнопка 'Ок' во всплывающем окне после сохранения и выхода")
+                                            break
+                                except:
+                                    continue
+            except:
+                print("Всплывающее окно после сохранения и выхода не появилось или не дождались")
+                
         except:
             print("Элемент сохранения не найден, возможно страница уже изменилась")
         expiration_date = None #Сбрасываем дату окончания для след людей

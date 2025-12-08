@@ -9,7 +9,7 @@ import math
 import config
 
 # Опциональное имя для тестовой обработки одного человека (оставьте пустым для обработки всех)
-TEST_PERSON_NAME = "Ярулин Ярослав"  # Установите ФИО конкретного человека для тестовой обработки, например "Иванов Иван Иванович"
+TEST_PERSON_NAME = None  # Установите ФИО конкретного человека для тестовой обработки, например "Иванов Иван Иванович"
 
 
 month = config.month
@@ -144,15 +144,14 @@ with sync_playwright() as p:
 
         df, orig_df, sheet = df_load()
         records = df_filter(df, month)
-
         #records = [entry for entry in records if 'Бадыкшанова Анна' in entry['фио ']] #DEBUG#  
 
         if records:
             # Если задано TEST_PERSON_NAME, фильтруем записи, чтобы обрабатывать только одного человека
             if TEST_PERSON_NAME:
-                records = [record for record in records if TEST_PERSON_NAME.lower() in record['фио '].lower()]
+                records = [entry for entry in records if TEST_PERSON_NAME in entry['фио ']]
                 if not records:
-                    print(f"Не найдено записей для {TEST_PERSON_NAME}")
+                    print(f"Не найдено записей для {TEST_PERSON_NAME} в exel для данного месяца")
                     sys.exit(0)
                 print(f"Найдена запись для тестовой обработки: {TEST_PERSON_NAME}")
             else:
@@ -167,6 +166,7 @@ with sync_playwright() as p:
                         page.fill('#ctl00_cph_grdList_ctl01_ctrlFastFind_tbFind', processed_fio)
                         page.click('#ctl00_cph_grdList_ctl01_ctrlFastFind_lbtnFastFind')
                         print(f"\nПоиск заявлениий ребенка {record['фио ']} [{i+1}/{len(records)}]")
+
 
                         #Проверка на наличие договора в заявлении
                         is_new = (not record['номер договора']) or str(record['номер договора']).strip().lower() in ('nan', 'none', '')
@@ -196,11 +196,7 @@ with sync_playwright() as p:
                             page = new_contract(page)
                             #!!!нужно как-то проверять, сначала на странице есть ли договор
                             #!!!обновлять df и уже искать последний средни них, если надо
-                            page, number_doc = find_dogovor(page)
-                            
-
-
-                            
+                            page, number_doc = find_dogovor(page)                 
 
                             if number_doc:
                                 print(f"У заявителя уже имеется заполненый договор {number_doc}")
